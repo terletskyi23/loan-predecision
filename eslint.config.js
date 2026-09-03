@@ -20,7 +20,17 @@ export default tseslint.config(
 
   {
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          // `const { omitted: _omitted, ...rest } = env` is how a test builds an
+          // environment with one variable missing. The omitted binding is the
+          // point of the expression, not an oversight.
+          ignoreRestSiblings: true,
+        },
+      ],
       'no-console': 'error',
     },
   },
