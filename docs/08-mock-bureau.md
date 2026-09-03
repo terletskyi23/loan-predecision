@@ -13,10 +13,18 @@ demand** or the failure path cannot be demonstrated on the deployed instance.
 ## 1. What the gateway passes to it, and why
 
 ```
-pull({ nationalId, subjectKey, provider }) -> BureauLookup
+BureauGateway.getReport({ nationalId, subjectKey }) -> BureauLookup
+BureauProvider.pull(nationalId)                     -> BureauProviderResult
 ```
 
 The national identifier is passed **to the provider**; the subject key is not.
+
+Note the second signature: the subject key is not a parameter the provider
+happens to ignore, it is not a parameter at all. The gateway takes both because
+it does the reuse lookup and the claim; the provider takes only what a bureau
+could actually search by. Written the other way — one `pull` taking both and an
+implementation that quietly drops one — the design reads as correct and cannot
+be pointed at a real bureau without changing its interface.
 This is easy to get backwards, and getting it backwards produces a design that
 cannot ever be pointed at a real bureau:
 
