@@ -3,6 +3,19 @@ import { pino } from 'pino';
 import { loadConfig } from '../src/config.js';
 import { createMetrics } from '../src/metrics.js';
 import { buildServer } from '../src/http/server.js';
+import type { Database } from '../src/db/pool.js'
+
+/** The spec is generated from route schemas; no statement is ever run. */
+const stubDatabase = (): Database => ({
+  ping: async () => {},
+  close: async () => {},
+  query: () => {
+    throw new Error('generating the specification runs no statements');
+  },
+  transaction: () => {
+    throw new Error('generating the specification runs no statements');
+  },
+});
 
 /**
  * Writes openapi.json from the live route definitions.
@@ -40,7 +53,7 @@ const config = loadConfig({
 const app = await buildServer({
   config,
   logger: pino({ level: 'silent' }),
-  database: { ping: async () => {}, close: async () => {} },
+  database: stubDatabase(),
   metrics: createMetrics(),
 });
 

@@ -1,7 +1,7 @@
 import { pino } from 'pino';
 import { describe, expect, it } from 'vitest';
 import { createDatabase } from '../../src/db/pool.js';
-import { testApp, testConfig } from '../support/app.js';
+import { healthyDatabase, testApp, testConfig } from '../support/app.js';
 
 /**
  * The split between the two probes is the point of this file. Confusing them
@@ -18,10 +18,10 @@ describe('liveness and readiness are not the same question', () => {
   it('reports 503 with the catalogue code when the database does not', async () => {
     const app = await testApp({
       database: {
+        ...healthyDatabase(),
         ping: async () => {
           throw new Error('connection refused');
         },
-        close: async () => {},
       },
     });
 
@@ -38,10 +38,10 @@ describe('liveness and readiness are not the same question', () => {
     // the restart loop would outlast the outage that caused it.
     const app = await testApp({
       database: {
+        ...healthyDatabase(),
         ping: async () => {
           throw new Error('connection refused');
         },
-        close: async () => {},
       },
     });
 
@@ -57,10 +57,10 @@ describe('liveness and readiness are not the same question', () => {
   it('does not leak the database error to the caller', async () => {
     const app = await testApp({
       database: {
+        ...healthyDatabase(),
         ping: async () => {
           throw new Error('password authentication failed for user "postgres"');
         },
-        close: async () => {},
       },
     });
 

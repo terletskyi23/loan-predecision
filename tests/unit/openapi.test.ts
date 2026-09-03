@@ -4,12 +4,25 @@ import { describe, expect, it } from 'vitest';
 import { buildServer } from '../../src/http/server.js';
 import { createMetrics } from '../../src/metrics.js';
 import { testConfig } from '../support/app.js';
+import type { Database } from '../../src/db/pool.js'
+
+/** The spec is generated from route schemas; no statement is ever run. */
+const stubDatabase = (): Database => ({
+  ping: async () => {},
+  close: async () => {},
+  query: () => {
+    throw new Error('generating the specification runs no statements');
+  },
+  transaction: () => {
+    throw new Error('generating the specification runs no statements');
+  },
+});
 
 const spec = async () => {
   const app = await buildServer({
     config: testConfig(),
     logger: pino({ level: 'silent' }),
-    database: { ping: async () => {}, close: async () => {} },
+    database: stubDatabase(),
     metrics: createMetrics(),
   });
   await app.ready();

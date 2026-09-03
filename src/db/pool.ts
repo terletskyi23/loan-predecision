@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, type QueryResult, type QueryResultRow } from 'pg';
 import type { Logger } from 'pino';
 import type { Config } from '../config.js';
 
@@ -8,10 +8,36 @@ import type { Config } from '../config.js';
  * a transaction-mode pooler does not preserve one.
  */
 
-export interface Database {
+/**
+ * Anything a statement can be run against: the pool, or one client inside a
+ * transaction.
+ *
+ * Repositories take this as their first argument rather than holding a
+ * connection of their own, which is what lets the SAME function run inside the
+ * closing transaction and outside it. A repository bound to a pool at
+ * construction cannot participate in a transaction it did not open, and the
+ * usual escape — a second "transactional" copy of every method — is where the
+ * two copies drift.
+ */
+export interface Queryable {
+  query<T extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<QueryResult<T>>;
+}
+
+export interface Database extends Queryable {
   /** Rejects if the database cannot answer. Used by the readiness probe. */
   ping(): Promise<void>;
   close(): Promise<void>;
+
+  /**
+   * BEGIN, run, COMMIT — or ROLLBACK on any throw.
+   *
+   * The closing writes of a submission are one transaction: the pre-decision,
+   * the review row, the closing audit events and the idempotency key's
+   * completion. Split them and there are two silent failure windows — a
+   * decision with no trail, or a client replaying a stored response for a
+   * decision that was rolled back.
+   */
+  transaction<T>(work: (tx: Queryable) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -68,6 +94,30 @@ export const createDatabase = (config: Config, logger: Logger): Database => {
   });
 
   return {
+    async query<T extends QueryResultRow>(text: string, values?: readonly unknown[]): Promise<QueryResult<T>> {
+      return pool.query<T>(text, values as unknown[] | undefined);
+    },
+
+    async transaction<T>(work: (tx: Queryable) => Promise<T>): Promise<T> {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await work({
+          query: async <R extends QueryResultRow>(text: string, values?: readonly unknown[]) =>
+            client.query<R>(text, values as unknown[] | undefined),
+        });
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        // A rollback that itself fails must not replace the original error:
+        // the second one is a symptom and the first one is the cause.
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
     async ping() {
       // Its own short deadline, enforced here rather than by the driver. A
       // readiness probe that hangs is worse than one that fails: the platform

@@ -28,10 +28,22 @@ export const testConfig = (overrides: NodeJS.ProcessEnv = {}): Config =>
     ...overrides,
   });
 
-/** A database that answers. Enough for anything that is not about the database. */
+/**
+ * A database that answers nothing but the probe.
+ *
+ * `query` and `transaction` throw rather than returning empty results: a test
+ * that reaches the database through this stub has escaped its own scope, and a
+ * silent empty result would let it pass while proving nothing.
+ */
+const unreachable = (): never => {
+  throw new Error('this test stubs the database; nothing here should run a statement');
+};
+
 export const healthyDatabase = (): Database => ({
   ping: async () => {},
   close: async () => {},
+  query: unreachable,
+  transaction: unreachable,
 });
 
 /** Silent by default: a test suite that prints its own logs hides its failures. */
