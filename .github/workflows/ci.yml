@@ -99,6 +99,26 @@ jobs:
   image:
     name: container image builds
     runs-on: ubuntu-latest
+
+    # The probe below boots the image the way the deployment does — including
+    # migrations on boot — so it needs a real database. Without one the
+    # container exits 1 before binding a port, which is correct behaviour and
+    # a useless test.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: predecision
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d predecision"
+          --health-interval=2s
+          --health-timeout=3s
+          --health-retries=30
+
     steps:
       - uses: actions/checkout@v4
 
@@ -121,11 +141,14 @@ jobs:
 
       # A built image that cannot start is not a built image. This runs the same
       # artefact the deployment runs and asserts the liveness probe answers.
-      - name: Boot the image and probe liveness
+      # --network host so the container reaches the Postgres service: inside a
+      # container, localhost is its own loopback, not the runner's.
+      - name: Boot the image and probe liveness and readiness
         run: |
-          docker run -d --name probe -p 3000:3000 \
+          docker run -d --name probe --network host \
+            -e PORT=3000 \
             -e SUBJECT_KEY_PEPPER=ci-pepper-value-long-enough-to-satisfy-the-schema \
-            -e DATABASE_URL=postgres://u:p@127.0.0.1:5432/db \
+            -e DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/predecision \
             -e API_TOKENS=acme-web:t1 \
             -e REVIEWER_TOKENS=underwriting:t2 \
             -e AUDITOR_TOKENS=compliance:t3 \
@@ -150,13 +173,41 @@ jobs:
           done
           if [ "${ok:-}" != "1" ]; then echo "liveness never answered"; docker logs probe; exit 1; fi
 
+          # Readiness proves the image migrated the schema on boot and can reach
+          # the database — the whole path a deploy takes, exercised here rather
+          # than discovered on Render.
+          if ! curl -fsS http://127.0.0.1:3000/health/ready; then
+            echo; echo "readiness failed: the image booted but did not migrate or cannot reach the database"
+            docker logs probe
+            exit 1
+          fi
+          echo
+
+          docker logs probe | grep -q 'schema ready' \
+            || { echo "no evidence migrations ran on boot"; docker logs probe; exit 1; }
+
       # A config failure must stop the process before it binds a port, so a
       # misconfiguration is a failed deploy rather than a service answering
       # requests insecurely (docs/06-failure-modes.md, Deployment).
-      - name: A missing secret must refuse to start
+      # Asserts the REASON, not just the failure. Without the grep this step
+      # passes whenever the container exits non-zero for any cause at all —
+      # which is how it kept passing while the boot probe was broken.
+      - name: A missing secret must refuse to start, and say which one
         run: |
-          if docker run --rm -e DATABASE_URL=postgres://u:p@127.0.0.1:5432/db loan-predecision:ci; then
+          set +e
+          output=$(docker run --rm \
+            --network host \
+            -e DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/predecision \
+            loan-predecision:ci 2>&1)
+          status=$?
+          set -e
+
+          echo "$output"
+
+          if [ "$status" -eq 0 ]; then
             echo "the image started without SUBJECT_KEY_PEPPER, which it must never do"
             exit 1
           fi
-          echo "refused to start, as designed"
+          echo "$output" | grep -q 'SUBJECT_KEY_PEPPER' \
+            || { echo "it failed, but not for the documented reason"; exit 1; }
+          echo "refused to start and named the variable, as designed"
