@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { problemExample } from './examples.js';
 import { PROBLEMS } from './problem.js';
 
 /**
@@ -27,6 +28,7 @@ export const problemSchema = z
   .meta({
     id: 'Problem',
     description: 'RFC 7807. Every error this service returns has this shape, including 404s for unknown routes.',
+    example: problemExample,
   });
 
 export const liveSchema = z.object({ status: z.literal('ok') });

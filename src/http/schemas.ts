@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  approvedInFullRequest,
+  approvedInFullResponse,
+  bureauOutageResponse,
+  closeReviewRequest,
+  counterOfferRequest,
+  counterOfferResponse,
+} from './examples.js';
 
 /**
  * The wire contract. One zod schema per route produces three things at once:
@@ -65,7 +73,15 @@ export const submitApplicationSchema = z
     customerId: z.string().max(128).optional(),
     channel: z.enum(CHANNELS).default('WEB'),
   })
-  .meta({ id: 'SubmitApplication' });
+  .meta({
+    id: 'SubmitApplication',
+    // `example` prefills Swagger UI's "Try it out" box; `examples` gives the
+    // reader the other documented scenarios without leaving the page. Both are
+    // the values tests/unit/examples.test.ts recomputes, so pressing the button
+    // against the deployed instance produces the answer shown beneath it.
+    example: approvedInFullRequest,
+    examples: [approvedInFullRequest, counterOfferRequest],
+  });
 
 export type SubmitApplicationBody = z.infer<typeof submitApplicationSchema>;
 
@@ -132,7 +148,11 @@ const envelope = {
   correlationId: z.string(),
 };
 
-export const submissionResponseSchema = z.object(envelope).meta({ id: 'Submission' });
+export const submissionResponseSchema = z.object(envelope).meta({
+  id: 'Submission',
+  example: approvedInFullResponse,
+  examples: [approvedInFullResponse, counterOfferResponse, bureauOutageResponse],
+});
 
 export const statusResponseSchema = z
   .object({
@@ -167,7 +187,7 @@ export const closeReviewSchema = z
     approvedAmountMinor: minorUnits.optional(),
     rationale: z.string().min(1).max(2000),
   })
-  .meta({ id: 'CloseReview' });
+  .meta({ id: 'CloseReview', example: closeReviewRequest });
 
 export const auditEventsSchema = z
   .object({

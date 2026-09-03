@@ -3,6 +3,7 @@ import fastifySwaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
 import {
   jsonSchemaTransform,
+  jsonSchemaTransformObject,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
@@ -66,6 +67,12 @@ export const buildServer = async ({ config, logger, database, metrics, services 
   await app.register(fastifySwagger, {
     openapi: openapiDocument(),
     transform: jsonSchemaTransform,
+    // A schema given an `id` through `.meta()` is emitted as a `$ref` into
+    // `components/schemas`, and WITHOUT this the components block stays empty
+    // and every one of those refs dangles — Swagger UI renders an unresolvable
+    // pointer instead of a body. The route transform alone is not enough; the
+    // document transform is what writes the definitions the refs point at.
+    transformObject: jsonSchemaTransformObject,
   });
 
   await app.register(fastifySwaggerUi, {

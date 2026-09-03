@@ -13,7 +13,3042 @@
         "description": "A bearer token in the form the service was configured with.\n\nThree separate lists exist — submission, review and audit — and a token valid for one scope\nreturns 403 on another. Use the **Authorize** button; the demo token is in the submission email."
       }
     },
-    "schemas": {}
+    "schemas": {
+      "ProblemInput": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "detail": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "MALFORMED_JSON",
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "APPLICATION_NOT_FOUND",
+              "IDEMPOTENT_REQUEST_IN_PROGRESS",
+              "REVIEW_ALREADY_CLOSED",
+              "VALIDATION_FAILED",
+              "IDEMPOTENCY_KEY_REUSED",
+              "UNKNOWN_PRODUCT",
+              "CONSENT_REQUIRED",
+              "CONSENT_STALE",
+              "RATE_LIMITED",
+              "INTERNAL_ERROR",
+              "DATABASE_UNAVAILABLE"
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "message"
+              ]
+            }
+          },
+          "correlationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "correlationId"
+        ],
+        "description": "RFC 7807. Every error this service returns has this shape, including 404s for unknown routes.",
+        "example": {
+          "type": "/problems/idempotency-key-reused",
+          "title": "Idempotency key reused",
+          "status": 422,
+          "detail": "This idempotency key was used for a different request body.",
+          "code": "IDEMPOTENCY_KEY_REUSED",
+          "correlationId": "01J9R4X8QK7M2V0T5S3B6N8WQE"
+        }
+      },
+      "SubmitApplicationInput": {
+        "type": "object",
+        "properties": {
+          "productCode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requestedAmountMinor": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "termMonths": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "DEBT_CONSOLIDATION",
+              "HOME_IMPROVEMENT",
+              "MEDICAL",
+              "MAJOR_PURCHASE",
+              "VEHICLE",
+              "EDUCATION",
+              "OTHER"
+            ]
+          },
+          "consent": {
+            "type": "object",
+            "properties": {
+              "attestedByCaller": {
+                "type": "boolean"
+              },
+              "acceptedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "attestedByCaller",
+              "acceptedAt"
+            ]
+          },
+          "applicant": {
+            "type": "object",
+            "properties": {
+              "firstName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "lastName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "dateOfBirth": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "nationalId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+              },
+              "phone": {
+                "type": "string",
+                "maxLength": 32
+              },
+              "residenceCountry": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2
+              }
+            },
+            "required": [
+              "firstName",
+              "lastName",
+              "dateOfBirth",
+              "nationalId",
+              "email",
+              "residenceCountry"
+            ]
+          },
+          "finances": {
+            "type": "object",
+            "properties": {
+              "monthlyIncomeMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              },
+              "employmentStatus": {
+                "type": "string",
+                "enum": [
+                  "EMPLOYED",
+                  "SELF_EMPLOYED",
+                  "RETIRED",
+                  "STUDENT",
+                  "UNEMPLOYED",
+                  "OTHER"
+                ]
+              },
+              "employmentMonths": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "declaredMonthlyObligationsMinor": {
+                "default": 0,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              }
+            },
+            "required": [
+              "monthlyIncomeMinor",
+              "employmentStatus"
+            ]
+          },
+          "customerId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "channel": {
+            "default": "WEB",
+            "type": "string",
+            "enum": [
+              "WEB",
+              "MOBILE",
+              "PARTNER",
+              "BRANCH"
+            ]
+          }
+        },
+        "required": [
+          "productCode",
+          "requestedAmountMinor",
+          "currency",
+          "termMonths",
+          "purpose",
+          "consent",
+          "applicant",
+          "finances"
+        ],
+        "example": {
+          "productCode": "PERSONAL_UNSECURED_V1",
+          "requestedAmountMinor": 1800000,
+          "currency": "USD",
+          "termMonths": 36,
+          "purpose": "HOME_IMPROVEMENT",
+          "consent": {
+            "attestedByCaller": true,
+            "acceptedAt": "2026-09-03T09:00:00.000Z"
+          },
+          "applicant": {
+            "firstName": "Daniel",
+            "lastName": "Okonkwo",
+            "dateOfBirth": "1988-02-19",
+            "nationalId": "900-55-0601",
+            "email": "daniel.okonkwo@example.com",
+            "residenceCountry": "US"
+          },
+          "finances": {
+            "monthlyIncomeMinor": 620000,
+            "employmentStatus": "EMPLOYED",
+            "employmentMonths": 94,
+            "declaredMonthlyObligationsMinor": 90000
+          },
+          "channel": "WEB"
+        },
+        "examples": [
+          {
+            "productCode": "PERSONAL_UNSECURED_V1",
+            "requestedAmountMinor": 1800000,
+            "currency": "USD",
+            "termMonths": 36,
+            "purpose": "HOME_IMPROVEMENT",
+            "consent": {
+              "attestedByCaller": true,
+              "acceptedAt": "2026-09-03T09:00:00.000Z"
+            },
+            "applicant": {
+              "firstName": "Daniel",
+              "lastName": "Okonkwo",
+              "dateOfBirth": "1988-02-19",
+              "nationalId": "900-55-0601",
+              "email": "daniel.okonkwo@example.com",
+              "residenceCountry": "US"
+            },
+            "finances": {
+              "monthlyIncomeMinor": 620000,
+              "employmentStatus": "EMPLOYED",
+              "employmentMonths": 94,
+              "declaredMonthlyObligationsMinor": 90000
+            },
+            "channel": "WEB"
+          },
+          {
+            "productCode": "PERSONAL_UNSECURED_V1",
+            "requestedAmountMinor": 3200000,
+            "currency": "USD",
+            "termMonths": 48,
+            "purpose": "DEBT_CONSOLIDATION",
+            "consent": {
+              "attestedByCaller": true,
+              "acceptedAt": "2026-09-03T09:00:00.000Z"
+            },
+            "applicant": {
+              "firstName": "Maria",
+              "lastName": "Delgado",
+              "dateOfBirth": "1991-04-12",
+              "nationalId": "900-55-0142",
+              "email": "maria.delgado@example.com",
+              "residenceCountry": "US"
+            },
+            "finances": {
+              "monthlyIncomeMinor": 540000,
+              "employmentStatus": "EMPLOYED",
+              "employmentMonths": 94,
+              "declaredMonthlyObligationsMinor": 160000
+            },
+            "channel": "WEB"
+          }
+        ]
+      },
+      "SubmissionInput": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "PRE_DECIDED",
+              "IN_REVIEW",
+              "REVIEW_CLOSED",
+              "ABANDONED"
+            ]
+          },
+          "submittedAt": {
+            "type": "string"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "requestedAmountMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "code",
+              "requestedAmountMinor",
+              "currency",
+              "termMonths"
+            ]
+          },
+          "preDecision": {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "APPROVED",
+                  "DECLINED",
+                  "MANUAL_REVIEW"
+                ]
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "offer": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "approvedAmountMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 3
+                      },
+                      "termMonths": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "annualRatePct": {
+                        "type": "number"
+                      },
+                      "monthlyPaymentMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                      },
+                      "expiresAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "approvedAmountMinor",
+                      "currency",
+                      "termMonths",
+                      "annualRatePct",
+                      "monthlyPaymentMinor",
+                      "expiresAt"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "assessment": {
+                "type": "object",
+                "properties": {
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxScore": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "band": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "AUTO_APPROVE",
+                          "REFERRAL",
+                          "DECLINE"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "dti": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "score",
+                  "maxScore",
+                  "band",
+                  "dti"
+                ]
+              },
+              "policyVersion": {
+                "type": "string"
+              },
+              "engineVersion": {
+                "type": "string"
+              },
+              "bureauReportId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "bureauReportReused": {
+                "type": "boolean"
+              },
+              "lookupFailureCause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "decidedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "verdict",
+              "reasonCodes",
+              "offer",
+              "assessment",
+              "policyVersion",
+              "engineVersion",
+              "bureauReportId",
+              "bureauReportReused",
+              "lookupFailureCause",
+              "decidedAt"
+            ]
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "CLOSED"
+                    ]
+                  },
+                  "outcome": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "APPROVED",
+                          "DECLINED"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "approvedAmountMinor": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reviewerId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rationale": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "openedAt": {
+                    "type": "string"
+                  },
+                  "closedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "outcome",
+                  "approvedAmountMinor",
+                  "reviewerId",
+                  "rationale",
+                  "openedAt",
+                  "closedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correlationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicationId",
+          "status",
+          "submittedAt",
+          "product",
+          "preDecision",
+          "review",
+          "correlationId"
+        ],
+        "example": {
+          "applicationId": "3f8c1b02-91d4-4a77-8e26-5c0b7ad34e19",
+          "status": "PRE_DECIDED",
+          "submittedAt": "2026-09-03T09:14:22.418Z",
+          "product": {
+            "code": "PERSONAL_UNSECURED_V1",
+            "requestedAmountMinor": 1800000,
+            "currency": "USD",
+            "termMonths": 36
+          },
+          "preDecision": {
+            "verdict": "APPROVED",
+            "reasonCodes": [],
+            "offer": {
+              "approvedAmountMinor": 1800000,
+              "currency": "USD",
+              "termMonths": 36,
+              "annualRatePct": 12.9,
+              "monthlyPaymentMinor": 60562,
+              "expiresAt": "2026-10-03T09:14:22.418Z"
+            },
+            "assessment": {
+              "score": 100,
+              "maxScore": 100,
+              "band": "AUTO_APPROVE",
+              "dti": 0.2428
+            },
+            "bureauReportId": "9d1e7c65-40ab-4b3f-8a52-1f6d09c8b774",
+            "bureauReportReused": false,
+            "lookupFailureCause": null,
+            "policyVersion": "2026.09.1",
+            "engineVersion": "1.0.0",
+            "decidedAt": "2026-09-03T09:14:23.106Z"
+          },
+          "review": null,
+          "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+        },
+        "examples": [
+          {
+            "applicationId": "3f8c1b02-91d4-4a77-8e26-5c0b7ad34e19",
+            "status": "PRE_DECIDED",
+            "submittedAt": "2026-09-03T09:14:22.418Z",
+            "product": {
+              "code": "PERSONAL_UNSECURED_V1",
+              "requestedAmountMinor": 1800000,
+              "currency": "USD",
+              "termMonths": 36
+            },
+            "preDecision": {
+              "verdict": "APPROVED",
+              "reasonCodes": [],
+              "offer": {
+                "approvedAmountMinor": 1800000,
+                "currency": "USD",
+                "termMonths": 36,
+                "annualRatePct": 12.9,
+                "monthlyPaymentMinor": 60562,
+                "expiresAt": "2026-10-03T09:14:22.418Z"
+              },
+              "assessment": {
+                "score": 100,
+                "maxScore": 100,
+                "band": "AUTO_APPROVE",
+                "dti": 0.2428
+              },
+              "bureauReportId": "9d1e7c65-40ab-4b3f-8a52-1f6d09c8b774",
+              "bureauReportReused": false,
+              "lookupFailureCause": null,
+              "policyVersion": "2026.09.1",
+              "engineVersion": "1.0.0",
+              "decidedAt": "2026-09-03T09:14:23.106Z"
+            },
+            "review": null,
+            "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+          },
+          {
+            "applicationId": "0b5f2a1e-6c47-4f0a-9b3d-7a1c48e2d905",
+            "status": "PRE_DECIDED",
+            "submittedAt": "2026-09-03T09:14:22.418Z",
+            "product": {
+              "code": "PERSONAL_UNSECURED_V1",
+              "requestedAmountMinor": 3200000,
+              "currency": "USD",
+              "termMonths": 48
+            },
+            "preDecision": {
+              "verdict": "APPROVED",
+              "reasonCodes": [
+                "AMOUNT_REDUCED_TO_FIT_DTI",
+                "CREDIT_UTILIZATION_TOO_HIGH",
+                "LIMITED_CREDIT_MIX"
+              ],
+              "offer": {
+                "approvedAmountMinor": 2690000,
+                "currency": "USD",
+                "termMonths": 48,
+                "annualRatePct": 12.9,
+                "monthlyPaymentMinor": 72033,
+                "expiresAt": "2026-10-03T09:14:22.418Z"
+              },
+              "assessment": {
+                "score": 75,
+                "maxScore": 100,
+                "band": "AUTO_APPROVE",
+                "dti": 0.4297
+              },
+              "bureauReportId": "c17a9d40-2b58-4e6d-8f11-90ab3c7e4d22",
+              "bureauReportReused": false,
+              "lookupFailureCause": null,
+              "policyVersion": "2026.09.1",
+              "engineVersion": "1.0.0",
+              "decidedAt": "2026-09-03T09:14:23.106Z"
+            },
+            "review": null,
+            "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+          },
+          {
+            "applicationId": "a742f1b8-05dc-4e93-8b60-cc1de5f2a390",
+            "status": "IN_REVIEW",
+            "submittedAt": "2026-09-03T09:14:22.418Z",
+            "product": {
+              "code": "PERSONAL_UNSECURED_V1",
+              "requestedAmountMinor": 1800000,
+              "currency": "USD",
+              "termMonths": 36
+            },
+            "preDecision": {
+              "verdict": "MANUAL_REVIEW",
+              "reasonCodes": [
+                "BUREAU_UNAVAILABLE"
+              ],
+              "offer": null,
+              "assessment": {
+                "score": null,
+                "maxScore": 100,
+                "band": null,
+                "dti": null
+              },
+              "bureauReportId": null,
+              "bureauReportReused": false,
+              "lookupFailureCause": "RETRIES_EXHAUSTED",
+              "policyVersion": "2026.09.1",
+              "engineVersion": "1.0.0",
+              "decidedAt": "2026-09-03T09:14:23.106Z"
+            },
+            "review": {
+              "state": "PENDING",
+              "outcome": null,
+              "approvedAmountMinor": null,
+              "reviewerId": null,
+              "rationale": null,
+              "openedAt": "2026-09-03T09:14:23.106Z",
+              "closedAt": null
+            },
+            "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+          }
+        ]
+      },
+      "ApplicationStatusInput": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "PRE_DECIDED",
+              "IN_REVIEW",
+              "REVIEW_CLOSED",
+              "ABANDONED"
+            ]
+          },
+          "submittedAt": {
+            "type": "string"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "requestedAmountMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "code",
+              "requestedAmountMinor",
+              "currency",
+              "termMonths"
+            ]
+          },
+          "preDecision": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "verdict": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVED",
+                      "DECLINED",
+                      "MANUAL_REVIEW"
+                    ]
+                  },
+                  "reasonCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "offer": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "approvedAmountMinor": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 3
+                          },
+                          "termMonths": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "annualRatePct": {
+                            "type": "number"
+                          },
+                          "monthlyPaymentMinor": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                          },
+                          "expiresAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "approvedAmountMinor",
+                          "currency",
+                          "termMonths",
+                          "annualRatePct",
+                          "monthlyPaymentMinor",
+                          "expiresAt"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "assessment": {
+                    "type": "object",
+                    "properties": {
+                      "score": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "maxScore": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "band": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "AUTO_APPROVE",
+                              "REFERRAL",
+                              "DECLINE"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "dti": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "score",
+                      "maxScore",
+                      "band",
+                      "dti"
+                    ]
+                  },
+                  "policyVersion": {
+                    "type": "string"
+                  },
+                  "engineVersion": {
+                    "type": "string"
+                  },
+                  "bureauReportId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bureauReportReused": {
+                    "type": "boolean"
+                  },
+                  "lookupFailureCause": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "decidedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "verdict",
+                  "reasonCodes",
+                  "offer",
+                  "assessment",
+                  "policyVersion",
+                  "engineVersion",
+                  "bureauReportId",
+                  "bureauReportReused",
+                  "lookupFailureCause",
+                  "decidedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "CLOSED"
+                    ]
+                  },
+                  "outcome": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "APPROVED",
+                          "DECLINED"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "approvedAmountMinor": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reviewerId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rationale": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "openedAt": {
+                    "type": "string"
+                  },
+                  "closedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "outcome",
+                  "approvedAmountMinor",
+                  "reviewerId",
+                  "rationale",
+                  "openedAt",
+                  "closedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "verdict": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVED",
+                      "DECLINED",
+                      "MANUAL_REVIEW"
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "ENGINE",
+                      "REVIEWER"
+                    ]
+                  },
+                  "decidedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "verdict",
+                  "source",
+                  "decidedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "applicationId",
+          "status",
+          "submittedAt",
+          "product",
+          "preDecision",
+          "review",
+          "correlationId",
+          "outcome"
+        ]
+      },
+      "CloseReviewInput": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "APPROVED",
+              "DECLINED"
+            ]
+          },
+          "approvedAmountMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "outcome",
+          "rationale"
+        ],
+        "example": {
+          "outcome": "APPROVED",
+          "approvedAmountMinor": 900000,
+          "rationale": "Bureau outage; file pulled manually and assessed. Income verified against payslips."
+        }
+      },
+      "AuditEventsInput": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "type": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "actor": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                },
+                "hash": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "index",
+                "type",
+                "at",
+                "actor",
+                "detail",
+                "hash"
+              ]
+            }
+          }
+        },
+        "required": [
+          "applicationId",
+          "events"
+        ]
+      },
+      "ChainVerificationInput": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "events": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "chainIntact": {
+            "type": "boolean"
+          },
+          "brokenAtIndex": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verifiedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicationId",
+          "events",
+          "chainIntact",
+          "brokenAtIndex",
+          "verifiedAt"
+        ]
+      },
+      "ReplayInput": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "match": {
+            "type": "boolean"
+          },
+          "recorded": {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "type": "string"
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requestedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "approvedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "monthlyPaymentMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "offerExpiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "score": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dti": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "policyVersion": {
+                "type": "string"
+              },
+              "engineVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "verdict",
+              "reasonCodes",
+              "requestedAmountMinor",
+              "approvedAmountMinor",
+              "monthlyPaymentMinor",
+              "offerExpiresAt",
+              "score",
+              "dti",
+              "policyVersion",
+              "engineVersion"
+            ]
+          },
+          "recomputed": {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "type": "string"
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requestedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "approvedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "monthlyPaymentMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "offerExpiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "score": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dti": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "policyVersion": {
+                "type": "string"
+              },
+              "engineVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "verdict",
+              "reasonCodes",
+              "requestedAmountMinor",
+              "approvedAmountMinor",
+              "monthlyPaymentMinor",
+              "offerExpiresAt",
+              "score",
+              "dti",
+              "policyVersion",
+              "engineVersion"
+            ]
+          },
+          "differences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "replayedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicationId",
+          "match",
+          "recorded",
+          "recomputed",
+          "differences",
+          "replayedAt"
+        ]
+      },
+      "PreDecisionListInput": {
+        "type": "object",
+        "properties": {
+          "preDecisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "applicationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "subjectKey": {
+                  "type": "string"
+                },
+                "verdict": {
+                  "type": "string"
+                },
+                "reasonCodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "policyVersion": {
+                  "type": "string"
+                },
+                "bureauReportReused": {
+                  "type": "boolean"
+                },
+                "decidedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "applicationId",
+                "subjectKey",
+                "verdict",
+                "reasonCodes",
+                "score",
+                "policyVersion",
+                "bureauReportReused",
+                "decidedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "preDecisions"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "detail": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "MALFORMED_JSON",
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "APPLICATION_NOT_FOUND",
+              "IDEMPOTENT_REQUEST_IN_PROGRESS",
+              "REVIEW_ALREADY_CLOSED",
+              "VALIDATION_FAILED",
+              "IDEMPOTENCY_KEY_REUSED",
+              "UNKNOWN_PRODUCT",
+              "CONSENT_REQUIRED",
+              "CONSENT_STALE",
+              "RATE_LIMITED",
+              "INTERNAL_ERROR",
+              "DATABASE_UNAVAILABLE"
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "correlationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "correlationId"
+        ],
+        "additionalProperties": false,
+        "description": "RFC 7807. Every error this service returns has this shape, including 404s for unknown routes.",
+        "example": {
+          "type": "/problems/idempotency-key-reused",
+          "title": "Idempotency key reused",
+          "status": 422,
+          "detail": "This idempotency key was used for a different request body.",
+          "code": "IDEMPOTENCY_KEY_REUSED",
+          "correlationId": "01J9R4X8QK7M2V0T5S3B6N8WQE"
+        }
+      },
+      "SubmitApplication": {
+        "type": "object",
+        "properties": {
+          "productCode": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requestedAmountMinor": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "termMonths": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "DEBT_CONSOLIDATION",
+              "HOME_IMPROVEMENT",
+              "MEDICAL",
+              "MAJOR_PURCHASE",
+              "VEHICLE",
+              "EDUCATION",
+              "OTHER"
+            ]
+          },
+          "consent": {
+            "type": "object",
+            "properties": {
+              "attestedByCaller": {
+                "type": "boolean"
+              },
+              "acceptedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "attestedByCaller",
+              "acceptedAt"
+            ],
+            "additionalProperties": false
+          },
+          "applicant": {
+            "type": "object",
+            "properties": {
+              "firstName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "lastName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "dateOfBirth": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "nationalId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+              },
+              "phone": {
+                "type": "string",
+                "maxLength": 32
+              },
+              "residenceCountry": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2
+              }
+            },
+            "required": [
+              "firstName",
+              "lastName",
+              "dateOfBirth",
+              "nationalId",
+              "email",
+              "residenceCountry"
+            ],
+            "additionalProperties": false
+          },
+          "finances": {
+            "type": "object",
+            "properties": {
+              "monthlyIncomeMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              },
+              "employmentStatus": {
+                "type": "string",
+                "enum": [
+                  "EMPLOYED",
+                  "SELF_EMPLOYED",
+                  "RETIRED",
+                  "STUDENT",
+                  "UNEMPLOYED",
+                  "OTHER"
+                ]
+              },
+              "employmentMonths": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "declaredMonthlyObligationsMinor": {
+                "default": 0,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              }
+            },
+            "required": [
+              "monthlyIncomeMinor",
+              "employmentStatus",
+              "declaredMonthlyObligationsMinor"
+            ],
+            "additionalProperties": false
+          },
+          "customerId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "channel": {
+            "default": "WEB",
+            "type": "string",
+            "enum": [
+              "WEB",
+              "MOBILE",
+              "PARTNER",
+              "BRANCH"
+            ]
+          }
+        },
+        "required": [
+          "productCode",
+          "requestedAmountMinor",
+          "currency",
+          "termMonths",
+          "purpose",
+          "consent",
+          "applicant",
+          "finances",
+          "channel"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "productCode": "PERSONAL_UNSECURED_V1",
+          "requestedAmountMinor": 1800000,
+          "currency": "USD",
+          "termMonths": 36,
+          "purpose": "HOME_IMPROVEMENT",
+          "consent": {
+            "attestedByCaller": true,
+            "acceptedAt": "2026-09-03T09:00:00.000Z"
+          },
+          "applicant": {
+            "firstName": "Daniel",
+            "lastName": "Okonkwo",
+            "dateOfBirth": "1988-02-19",
+            "nationalId": "900-55-0601",
+            "email": "daniel.okonkwo@example.com",
+            "residenceCountry": "US"
+          },
+          "finances": {
+            "monthlyIncomeMinor": 620000,
+            "employmentStatus": "EMPLOYED",
+            "employmentMonths": 94,
+            "declaredMonthlyObligationsMinor": 90000
+          },
+          "channel": "WEB"
+        },
+        "examples": [
+          {
+            "productCode": "PERSONAL_UNSECURED_V1",
+            "requestedAmountMinor": 1800000,
+            "currency": "USD",
+            "termMonths": 36,
+            "purpose": "HOME_IMPROVEMENT",
+            "consent": {
+              "attestedByCaller": true,
+              "acceptedAt": "2026-09-03T09:00:00.000Z"
+            },
+            "applicant": {
+              "firstName": "Daniel",
+              "lastName": "Okonkwo",
+              "dateOfBirth": "1988-02-19",
+              "nationalId": "900-55-0601",
+              "email": "daniel.okonkwo@example.com",
+              "residenceCountry": "US"
+            },
+            "finances": {
+              "monthlyIncomeMinor": 620000,
+              "employmentStatus": "EMPLOYED",
+              "employmentMonths": 94,
+              "declaredMonthlyObligationsMinor": 90000
+            },
+            "channel": "WEB"
+          },
+          {
+            "productCode": "PERSONAL_UNSECURED_V1",
+            "requestedAmountMinor": 3200000,
+            "currency": "USD",
+            "termMonths": 48,
+            "purpose": "DEBT_CONSOLIDATION",
+            "consent": {
+              "attestedByCaller": true,
+              "acceptedAt": "2026-09-03T09:00:00.000Z"
+            },
+            "applicant": {
+              "firstName": "Maria",
+              "lastName": "Delgado",
+              "dateOfBirth": "1991-04-12",
+              "nationalId": "900-55-0142",
+              "email": "maria.delgado@example.com",
+              "residenceCountry": "US"
+            },
+            "finances": {
+              "monthlyIncomeMinor": 540000,
+              "employmentStatus": "EMPLOYED",
+              "employmentMonths": 94,
+              "declaredMonthlyObligationsMinor": 160000
+            },
+            "channel": "WEB"
+          }
+        ]
+      },
+      "Submission": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "PRE_DECIDED",
+              "IN_REVIEW",
+              "REVIEW_CLOSED",
+              "ABANDONED"
+            ]
+          },
+          "submittedAt": {
+            "type": "string"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "requestedAmountMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "code",
+              "requestedAmountMinor",
+              "currency",
+              "termMonths"
+            ],
+            "additionalProperties": false
+          },
+          "preDecision": {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "APPROVED",
+                  "DECLINED",
+                  "MANUAL_REVIEW"
+                ]
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "offer": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "approvedAmountMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 3
+                      },
+                      "termMonths": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "annualRatePct": {
+                        "type": "number"
+                      },
+                      "monthlyPaymentMinor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                      },
+                      "expiresAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "approvedAmountMinor",
+                      "currency",
+                      "termMonths",
+                      "annualRatePct",
+                      "monthlyPaymentMinor",
+                      "expiresAt"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "assessment": {
+                "type": "object",
+                "properties": {
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxScore": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "band": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "AUTO_APPROVE",
+                          "REFERRAL",
+                          "DECLINE"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "dti": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "score",
+                  "maxScore",
+                  "band",
+                  "dti"
+                ],
+                "additionalProperties": false
+              },
+              "policyVersion": {
+                "type": "string"
+              },
+              "engineVersion": {
+                "type": "string"
+              },
+              "bureauReportId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "bureauReportReused": {
+                "type": "boolean"
+              },
+              "lookupFailureCause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "decidedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "verdict",
+              "reasonCodes",
+              "offer",
+              "assessment",
+              "policyVersion",
+              "engineVersion",
+              "bureauReportId",
+              "bureauReportReused",
+              "lookupFailureCause",
+              "decidedAt"
+            ],
+            "additionalProperties": false
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "CLOSED"
+                    ]
+                  },
+                  "outcome": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "APPROVED",
+                          "DECLINED"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "approvedAmountMinor": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reviewerId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rationale": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "openedAt": {
+                    "type": "string"
+                  },
+                  "closedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "outcome",
+                  "approvedAmountMinor",
+                  "reviewerId",
+                  "rationale",
+                  "openedAt",
+                  "closedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correlationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicationId",
+          "status",
+          "submittedAt",
+          "product",
+          "preDecision",
+          "review",
+          "correlationId"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "applicationId": "3f8c1b02-91d4-4a77-8e26-5c0b7ad34e19",
+          "status": "PRE_DECIDED",
+          "submittedAt": "2026-09-03T09:14:22.418Z",
+          "product": {
+            "code": "PERSONAL_UNSECURED_V1",
+            "requestedAmountMinor": 1800000,
+            "currency": "USD",
+            "termMonths": 36
+          },
+          "preDecision": {
+            "verdict": "APPROVED",
+            "reasonCodes": [],
+            "offer": {
+              "approvedAmountMinor": 1800000,
+              "currency": "USD",
+              "termMonths": 36,
+              "annualRatePct": 12.9,
+              "monthlyPaymentMinor": 60562,
+              "expiresAt": "2026-10-03T09:14:22.418Z"
+            },
+            "assessment": {
+              "score": 100,
+              "maxScore": 100,
+              "band": "AUTO_APPROVE",
+              "dti": 0.2428
+            },
+            "bureauReportId": "9d1e7c65-40ab-4b3f-8a52-1f6d09c8b774",
+            "bureauReportReused": false,
+            "lookupFailureCause": null,
+            "policyVersion": "2026.09.1",
+            "engineVersion": "1.0.0",
+            "decidedAt": "2026-09-03T09:14:23.106Z"
+          },
+          "review": null,
+          "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+        },
+        "examples": [
+          {
+            "applicationId": "3f8c1b02-91d4-4a77-8e26-5c0b7ad34e19",
+            "status": "PRE_DECIDED",
+            "submittedAt": "2026-09-03T09:14:22.418Z",
+            "product": {
+              "code": "PERSONAL_UNSECURED_V1",
+              "requestedAmountMinor": 1800000,
+              "currency": "USD",
+              "termMonths": 36
+            },
+            "preDecision": {
+              "verdict": "APPROVED",
+              "reasonCodes": [],
+              "offer": {
+                "approvedAmountMinor": 1800000,
+                "currency": "USD",
+                "termMonths": 36,
+                "annualRatePct": 12.9,
+                "monthlyPaymentMinor": 60562,
+                "expiresAt": "2026-10-03T09:14:22.418Z"
+              },
+              "assessment": {
+                "score": 100,
+                "maxScore": 100,
+                "band": "AUTO_APPROVE",
+                "dti": 0.2428
+              },
+              "bureauReportId": "9d1e7c65-40ab-4b3f-8a52-1f6d09c8b774",
+              "bureauReportReused": false,
+              "lookupFailureCause": null,
+              "policyVersion": "2026.09.1",
+              "engineVersion": "1.0.0",
+              "decidedAt": "2026-09-03T09:14:23.106Z"
+            },
+            "review": null,
+            "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+          },
+          {
+            "applicationId": "0b5f2a1e-6c47-4f0a-9b3d-7a1c48e2d905",
+            "status": "PRE_DECIDED",
+            "submittedAt": "2026-09-03T09:14:22.418Z",
+            "product": {
+              "code": "PERSONAL_UNSECURED_V1",
+              "requestedAmountMinor": 3200000,
+              "currency": "USD",
+              "termMonths": 48
+            },
+            "preDecision": {
+              "verdict": "APPROVED",
+              "reasonCodes": [
+                "AMOUNT_REDUCED_TO_FIT_DTI",
+                "CREDIT_UTILIZATION_TOO_HIGH",
+                "LIMITED_CREDIT_MIX"
+              ],
+              "offer": {
+                "approvedAmountMinor": 2690000,
+                "currency": "USD",
+                "termMonths": 48,
+                "annualRatePct": 12.9,
+                "monthlyPaymentMinor": 72033,
+                "expiresAt": "2026-10-03T09:14:22.418Z"
+              },
+              "assessment": {
+                "score": 75,
+                "maxScore": 100,
+                "band": "AUTO_APPROVE",
+                "dti": 0.4297
+              },
+              "bureauReportId": "c17a9d40-2b58-4e6d-8f11-90ab3c7e4d22",
+              "bureauReportReused": false,
+              "lookupFailureCause": null,
+              "policyVersion": "2026.09.1",
+              "engineVersion": "1.0.0",
+              "decidedAt": "2026-09-03T09:14:23.106Z"
+            },
+            "review": null,
+            "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+          },
+          {
+            "applicationId": "a742f1b8-05dc-4e93-8b60-cc1de5f2a390",
+            "status": "IN_REVIEW",
+            "submittedAt": "2026-09-03T09:14:22.418Z",
+            "product": {
+              "code": "PERSONAL_UNSECURED_V1",
+              "requestedAmountMinor": 1800000,
+              "currency": "USD",
+              "termMonths": 36
+            },
+            "preDecision": {
+              "verdict": "MANUAL_REVIEW",
+              "reasonCodes": [
+                "BUREAU_UNAVAILABLE"
+              ],
+              "offer": null,
+              "assessment": {
+                "score": null,
+                "maxScore": 100,
+                "band": null,
+                "dti": null
+              },
+              "bureauReportId": null,
+              "bureauReportReused": false,
+              "lookupFailureCause": "RETRIES_EXHAUSTED",
+              "policyVersion": "2026.09.1",
+              "engineVersion": "1.0.0",
+              "decidedAt": "2026-09-03T09:14:23.106Z"
+            },
+            "review": {
+              "state": "PENDING",
+              "outcome": null,
+              "approvedAmountMinor": null,
+              "reviewerId": null,
+              "rationale": null,
+              "openedAt": "2026-09-03T09:14:23.106Z",
+              "closedAt": null
+            },
+            "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+          }
+        ]
+      },
+      "ApplicationStatus": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "PRE_DECIDED",
+              "IN_REVIEW",
+              "REVIEW_CLOSED",
+              "ABANDONED"
+            ]
+          },
+          "submittedAt": {
+            "type": "string"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "requestedAmountMinor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "code",
+              "requestedAmountMinor",
+              "currency",
+              "termMonths"
+            ],
+            "additionalProperties": false
+          },
+          "preDecision": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "verdict": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVED",
+                      "DECLINED",
+                      "MANUAL_REVIEW"
+                    ]
+                  },
+                  "reasonCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "offer": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "approvedAmountMinor": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 3
+                          },
+                          "termMonths": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "annualRatePct": {
+                            "type": "number"
+                          },
+                          "monthlyPaymentMinor": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+                          },
+                          "expiresAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "approvedAmountMinor",
+                          "currency",
+                          "termMonths",
+                          "annualRatePct",
+                          "monthlyPaymentMinor",
+                          "expiresAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "assessment": {
+                    "type": "object",
+                    "properties": {
+                      "score": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "maxScore": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "band": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "AUTO_APPROVE",
+                              "REFERRAL",
+                              "DECLINE"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "dti": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "score",
+                      "maxScore",
+                      "band",
+                      "dti"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "policyVersion": {
+                    "type": "string"
+                  },
+                  "engineVersion": {
+                    "type": "string"
+                  },
+                  "bureauReportId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bureauReportReused": {
+                    "type": "boolean"
+                  },
+                  "lookupFailureCause": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "decidedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "verdict",
+                  "reasonCodes",
+                  "offer",
+                  "assessment",
+                  "policyVersion",
+                  "engineVersion",
+                  "bureauReportId",
+                  "bureauReportReused",
+                  "lookupFailureCause",
+                  "decidedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "PENDING",
+                      "CLOSED"
+                    ]
+                  },
+                  "outcome": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "APPROVED",
+                          "DECLINED"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "approvedAmountMinor": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reviewerId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rationale": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "openedAt": {
+                    "type": "string"
+                  },
+                  "closedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "outcome",
+                  "approvedAmountMinor",
+                  "reviewerId",
+                  "rationale",
+                  "openedAt",
+                  "closedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "verdict": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVED",
+                      "DECLINED",
+                      "MANUAL_REVIEW"
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "ENGINE",
+                      "REVIEWER"
+                    ]
+                  },
+                  "decidedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "verdict",
+                  "source",
+                  "decidedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "applicationId",
+          "status",
+          "submittedAt",
+          "product",
+          "preDecision",
+          "review",
+          "correlationId",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "CloseReview": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "APPROVED",
+              "DECLINED"
+            ]
+          },
+          "approvedAmountMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Minor units, e.g. cents. 2690000 is $26,900.00"
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "outcome",
+          "rationale"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "outcome": "APPROVED",
+          "approvedAmountMinor": 900000,
+          "rationale": "Bureau outage; file pulled manually and assessed. Income verified against payslips."
+        }
+      },
+      "AuditEvents": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "type": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "actor": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                },
+                "hash": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "index",
+                "type",
+                "at",
+                "actor",
+                "detail",
+                "hash"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "applicationId",
+          "events"
+        ],
+        "additionalProperties": false
+      },
+      "ChainVerification": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "events": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "chainIntact": {
+            "type": "boolean"
+          },
+          "brokenAtIndex": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verifiedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicationId",
+          "events",
+          "chainIntact",
+          "brokenAtIndex",
+          "verifiedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Replay": {
+        "type": "object",
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "match": {
+            "type": "boolean"
+          },
+          "recorded": {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "type": "string"
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requestedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "approvedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "monthlyPaymentMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "offerExpiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "score": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dti": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "policyVersion": {
+                "type": "string"
+              },
+              "engineVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "verdict",
+              "reasonCodes",
+              "requestedAmountMinor",
+              "approvedAmountMinor",
+              "monthlyPaymentMinor",
+              "offerExpiresAt",
+              "score",
+              "dti",
+              "policyVersion",
+              "engineVersion"
+            ],
+            "additionalProperties": false
+          },
+          "recomputed": {
+            "type": "object",
+            "properties": {
+              "verdict": {
+                "type": "string"
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requestedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "approvedAmountMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "monthlyPaymentMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "offerExpiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "score": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "dti": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "policyVersion": {
+                "type": "string"
+              },
+              "engineVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "verdict",
+              "reasonCodes",
+              "requestedAmountMinor",
+              "approvedAmountMinor",
+              "monthlyPaymentMinor",
+              "offerExpiresAt",
+              "score",
+              "dti",
+              "policyVersion",
+              "engineVersion"
+            ],
+            "additionalProperties": false
+          },
+          "differences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "replayedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicationId",
+          "match",
+          "recorded",
+          "recomputed",
+          "differences",
+          "replayedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PreDecisionList": {
+        "type": "object",
+        "properties": {
+          "preDecisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "applicationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "subjectKey": {
+                  "type": "string"
+                },
+                "verdict": {
+                  "type": "string"
+                },
+                "reasonCodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "policyVersion": {
+                  "type": "string"
+                },
+                "bureauReportReused": {
+                  "type": "boolean"
+                },
+                "decidedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "applicationId",
+                "subjectKey",
+                "verdict",
+                "reasonCodes",
+                "score",
+                "policyVersion",
+                "bureauReportReused",
+                "decidedAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "preDecisions"
+        ],
+        "additionalProperties": false
+      }
+    }
   },
   "paths": {
     "/health/live": {

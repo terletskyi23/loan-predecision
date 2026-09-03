@@ -95,3 +95,40 @@ describe('the specification is generated, and it is checked against the prose', 
     );
   });
 });
+
+describe('the document is internally resolvable', () => {
+  it('has no $ref that points at nothing', async () => {
+    // THIS IS THE TEST THAT WAS MISSING, and its absence shipped a broken
+    // reference page. Schemas given an `id` through `.meta()` are emitted as
+    // `$ref`s into components/schemas, and the swagger plugin only writes those
+    // definitions when a transformObject is registered. Without it the paths
+    // referenced eighteen components and the components block was empty: every
+    // pointer dangled, and Swagger UI rendered no request body at all.
+    //
+    // Nothing caught it because every other assertion here reads paths, and a
+    // dangling ref is perfectly well-formed JSON.
+    const document = await spec();
+    const defined = new Set(Object.keys((document as unknown as { components?: { schemas?: Record<string, unknown> } }).components?.schemas ?? {}));
+
+    const refs = new Set<string>();
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (node === null || typeof node !== 'object') return;
+      for (const [key, value] of Object.entries(node)) {
+        if (key === '$ref' && typeof value === 'string') refs.add(value);
+        else walk(value);
+      }
+    };
+    walk(document);
+
+    expect(refs.size, 'the document should reference its components').toBeGreaterThan(0);
+    const dangling = [...refs].filter((ref) => !defined.has(ref.replace('#/components/schemas/', '')));
+    expect(dangling).toEqual([]);
+  });
+
+  it('prefills the interactive reference with a request a reviewer can send', async () => {
+    const document = await spec();
+    const schemas = (document as unknown as { components: { schemas: Record<string, { example?: unknown }> } }).components.schemas;
+    expect(schemas['SubmitApplicationInput']?.example).toBeDefined();
+  });
+});
