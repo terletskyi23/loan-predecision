@@ -77,5 +77,8 @@ for the whole external call.
   it, and the residual harm.
 - A claim table and a lease are extra machinery — roughly sixty lines — and a
   crashed holder delays exactly one applicant by the lease duration.
-- `bureau_reuse_ratio` becomes a first-class metric: it is the only signal that
+- the reuse ratio becomes a first-class signal — derived from
+  `bureau_lookups_total{result}` rather than exported as a gauge, because a ratio
+  is a query and exporting it would fix the denominator at scrape time. It is the
+  only signal that
   would move if this stopped working.

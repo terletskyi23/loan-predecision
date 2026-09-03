@@ -54,7 +54,8 @@ Added deliberately:
 | Risk-based pricing | One product, one rate. The scorecard already produces the input a rate curve would need |
 | Pseudonymisation and erasure jobs | The schema does not block them; the jobs are not written |
 | External anchoring of the audit chain head | Named in `docs/04-audit.md` §3 |
-| Authorisation on reads beyond an unguessable id | Recorded openly rather than passed off as security. `docs/05-api.md` §4 covers why unknown and forbidden ids both return `404` |
+| Authorisation on reads **beyond ownership** | Reads *are* owner-scoped: the repository compares `applications.client_id` against the identity on the bearer token and returns nothing on a mismatch. This row previously said "beyond an unguessable id", which under-claimed what the code does. What is genuinely absent is anything past ownership — no roles, no delegation, no per-application grants. `docs/05-api.md` §4 covers why an unknown id and another client's id return byte-identical `404`s |
+| Tenant scoping on the **review close** | Any holder of a reviewer token can close any referred application, and `reviewerId` is taken from that token. Defensible — reviewers are internal staff and the three scopes already stop a submitter approving their own application — but it is a *write* and it does not have the ownership check the reads have. Named here rather than left to be found |
 
 ## 4. Decisions taken
 

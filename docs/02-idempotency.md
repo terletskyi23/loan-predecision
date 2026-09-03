@@ -329,30 +329,45 @@ unavailable.
 
 ## 7. How each layer is proven
 
-Full detail in `docs/07-testing.md`; the properties are:
+Full detail in `docs/07-testing.md`. **Which of these is a test and which is a
+mechanism nobody raced is stated per row**, because the difference matters most
+in exactly this section: it is the one a reader consults to learn what is true
+about the requirement the brief singled out.
 
-| Property | Layer |
-|---|---|
-| Same key twice → one application, byte-identical replay | 1 |
-| Same key, different body → `422`, first application untouched | 1 |
-| N concurrent requests, same key → exactly one application row | 1 |
-| Two clients, same key string → two applications, neither sees the other's body | 1 |
-| Expired lease with `application_id` set → the orphan is **resumed**, not duplicated | 1 |
-| Two sequential applications, same person, inside TTL → **one** bureau call | 3 |
-| Two applications after the TTL → two calls | 3 |
-| Two applications, different people → two calls | 3 |
-| Same person, first lookup was `NO_HIT`, inside TTL → **one** call | 3 |
-| N concurrent applications, same person → **exactly one** bureau call | 3 |
-| Claim holder fails → next request pulls successfully, is not blocked | 3 |
-| Expired lease is taken over | 3 |
-| Wait expires, report lands late → the late report is used, not `BUREAU_UNAVAILABLE` | 3 |
-| Three spellings of one identifier → one subject key, one call | 3 |
-| Two attempts of one pull carry the same request id | 4 |
-| `4xx` from the bureau → zero retries | 4 |
+| Property | Layer | Covered by |
+|---|---|---|
+| Same key twice → one application, byte-identical replay | 1 | `integration/vertical-slice` |
+| Same key, different body → `422`, first application untouched | 1 | `integration/vertical-slice` |
+| N concurrent requests, same key → exactly one application row | 1 | `integration/vertical-slice` — eight at once |
+| Two clients, same key string → two applications, neither sees the other's body | 1 | `integration/review-findings` — two real clients |
+| Expired lease with `application_id` set → the orphan is **resumed**, not duplicated | 1 | **not tested.** The resume path and the duplicate-verdict recovery beside it are exercised only by inspection |
+| Two sequential applications, same person, inside TTL → **one** bureau call | 3 | `integration/vertical-slice` |
+| Two applications after the TTL → two calls | 3 | **not tested.** Needs a clock the integration suite does not inject |
+| Two applications, different people → two calls | 3 | **not tested** directly; implied by every other case pulling once per subject |
+| Same person, first lookup was `NO_HIT`, inside TTL → **one** call | 3 | `integration/vertical-slice` |
+| N concurrent applications, same person → **exactly one** bureau call | 3 | `integration/vertical-slice` — six at once |
+| Claim holder fails → next request pulls successfully, is not blocked | 3 | **not tested.** `failClaim` makes the claim immediately reclaimable; no test races it |
+| Expired lease is taken over | 3 | **not tested** beyond the schema-level constraint |
+| Wait expires, report lands late → the late report is used, not `BUREAU_UNAVAILABLE` | 3 | **not tested.** The re-read exists in the gateway and no test races a winner against a waiter |
+| Three spellings of one identifier → one subject key, one call | 3 | `integration/vertical-slice`, `unit/bureau-provider` |
+| Two attempts of one pull carry the same request id | 4 | `unit/bureau-provider` |
+| `4xx` from the bureau → zero retries | 4 | **not implementable.** `BureauProviderFailure` has no 4xx to express, so the rule in §6 is specified and unenforced |
 
-The two in bold are the assignment. Both hit real unique constraints — against
-an in-memory substitute they would pass while proving nothing, and each is
-paired with a schema-level test that asserts the constraint exists.
+Eight of sixteen are tests. The other eight are mechanisms that exist in the
+code and that no test drives into the race they are written for — and the honest
+reading of that is: the *deterministic* half of layer 3 is proven, the
+*timing-dependent* half is argued. The two properties in bold are the assignment
+itself, and both are tests: they hit real unique constraints, they are paired
+with a schema-level test asserting the constraint exists, and against an
+in-memory substitute they would pass while proving nothing.
+
+**Why the untested eight were not written.** Every one of them needs either an
+injected clock inside the integration suite or a deliberate mid-flight pause in
+one request while another proceeds. Both are buildable; neither was built, and
+saying so is cheaper than a table that reads as sixteen guarantees when it is
+eight. An earlier version of this table listed all sixteen with no distinction —
+and `docs/06`'s coverage table, which is the same claim from the other side, had
+drifted into naming ten test files that did not exist.
 
 ---
 

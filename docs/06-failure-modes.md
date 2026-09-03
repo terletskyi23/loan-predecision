@@ -14,7 +14,7 @@ optimism.
 
 | What breaks | How we notice | What the system does | What a human does |
 |---|---|---|---|
-| Bureau returns `5xx` or times out | `bureau_pulls_total{result="failure"}`, manual-review share rises | Jittered backoff, one retry, then `MANUAL_REVIEW` + `BUREAU_UNAVAILABLE`. The application is persisted either way | Underwriters work the review queue; on-call checks the provider status |
+| Bureau returns `5xx` or times out | `bureau_pulls_total{outcome="unavailable"}`, manual-review share rises | Jittered backoff, one retry, then `MANUAL_REVIEW` + `BUREAU_UNAVAILABLE`. The application is persisted either way | Underwriters work the review queue; on-call checks the provider status |
 | Bureau is slow but succeeding | `bureau_call_duration_seconds` p95 approaches the 800 ms timeout | Nothing automatic. Requests get slower, then start timing out into review | Raise the timeout or degrade deliberately; do not let it drift |
 | Bureau returns `4xx` | Same counter, `result="client_error"` | **Zero retries.** A `400` is our bug and retrying only burns budget | Fix the request contract |
 | Bureau is down for hours | Manual-review share near 100% | Backoff and the attempt cap protect us, but we keep calling a dead service | **named** — no circuit breaker in v1. `docs/02-idempotency.md` §8 |
@@ -40,14 +40,14 @@ optimism.
 | Client reuses one key for different bodies | `idempotency_conflicts_total` rises | `422 IDEMPOTENCY_KEY_REUSED` | Tell the integrator — this is a client bug and the counter is how you find it |
 | Two integrators pick the same key string | Would leak one's response to the other | Cannot happen: the key is `(client_id, scope, key)` and `client_id` comes from the token | Nothing |
 | Two concurrent applications for one person | `bureau_claim_contention_total` rises | The claim collapses them into one pull; the loser waits for the winner's report | Nothing |
-| The winner's pull fails while a loser is waiting | `bureau_pulls_total{result="failure"}` | The loser sees the claim go `FAILED` and **stops immediately**, adopting the winner's real cause. It does not sit out the full wait and it does not record `WAIT_EXPIRED` | Treat as the bureau failure it is |
+| The winner's pull fails while a loser is waiting | `bureau_pulls_total{outcome="unavailable"}` | The loser sees the claim go `FAILED` and **stops immediately**, adopting the winner's real cause. It does not sit out the full wait and it does not record `WAIT_EXPIRED` | Treat as the bureau failure it is |
 | The loser's wait expires with the claim still `IN_FLIGHT` | **`bureau_wait_expired_total`** rises | Re-reads once, uses a late-landing report if there is one, otherwise refers with `cause: WAIT_EXPIRED` | The winner is alive and slower than our patience. Usually the wait is too short for the retry budget — this counter means that and only that, now that a failed claim short-circuits the wait |
 | Claim holder crashes mid-pull | Latency spike for that one subject | The 5-second lease expires; the next request takes the claim over | Nothing |
 | **Process dies mid-pull, client never retries** | `applications_abandoned_total` rises | The application sits in `RECEIVED` with no pre-decision. The sweeper moves it to `ABANDONED`, retires the idempotency key in the same transaction, and appends an audit event. The `BUREAU_PULL_REQUESTED` event written before the call survives, so the record that this file was marked is not lost with the crash | Non-zero means crashes. Look at why the process died |
 | Client retries hours after the sweep retired the key | `idempotency_replays_total` does not move | Treated as a fresh submission. Not a resume — the original is terminal — and not a second bureau pull, because layer 3 still holds | Nothing |
 | A slow-but-alive claim holder loses its lease | `bureau_claim_contention_total` | A second pull happens. The write is not fenced, and no constraint objects | **named** — the one place a guarantee is a lease rather than a constraint. `docs/01-architecture.md` §3 names the fix, the cost and the trigger |
 | Process dies mid-pull, client retries the same key | Latency spike | The lease expires and the taker **resumes the original application** via `idempotency_keys.application_id` — it does not create a second one | Nothing |
-| Deduplication silently stops working | **`bureau_reuse_ratio` falls** | Nothing automatic | Investigate immediately. No other signal would reveal this — errors stay at zero while costs and applicant harm rise |
+| Deduplication silently stops working | **the reuse ratio falls** — `bureau_lookups_total{result="reused"}` over the sum | Nothing automatic | Investigate immediately. No other signal would reveal this — errors stay at zero while costs and applicant harm rise |
 | Client submits twice with no idempotency key | Two applications, one pull | Accepted by design — `docs/02-idempotency.md` §5 | Nothing, unless funnel data shows it is noisy |
 | Two reviewers close one case at the same time | `409` in the reviewer's client | Conditional update: one write wins, the other gets `REVIEW_ALREADY_CLOSED` | Nothing |
 
@@ -169,7 +169,7 @@ Not everything above deserves a page. Four signals, in order:
 1. **Manual-review share** — catches a broken policy, a failing bureau and a bad
    deploy, all at once.
 2. **Bureau failure rate.**
-3. **`bureau_reuse_ratio` falling** — the only signal that the central
+3. **The reuse ratio falling** — derived from `bureau_lookups_total`, and the only signal that the central
    requirement of this service has stopped working. It is a business ratio, so it
    moves with traffic composition too: it needs a baseline before it can be
    alerted on, and it is noisy. It stays first among the deduplication signals

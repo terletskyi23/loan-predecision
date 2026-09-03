@@ -268,7 +268,8 @@ saying so out loud is worth more than a green tick.
   returns `503`. Confusing the two means a load balancer either kills a healthy
   container or keeps routing to a broken one.
 - `/metrics` without an auditor token → `401`.
-- `/metrics` exposes the named counters, and `bureau_reuse_ratio` actually moves
+- `/metrics` exposes the named counters, and the reuse ratio derived from
+  `bureau_lookups_total` actually moves
   after a reused pull.
 - Every response carries `X-Correlation-Id`, and it appears in the error body.
 - `outcome.source` flips from `ENGINE` to `REVIEWER` after a close, while
@@ -365,9 +366,9 @@ npm run test:unit                # pure, no database needed
 ```
 
 At the close of the vertical slice, after an adversarial review and its fixes:
-**261 passing, 1 skipped**, against PostgreSQL 16. 201 unit and API tests need
-no database; 61 integration tests need one and skip without it, which is why CI
-sets `REQUIRE_DATABASE=1` and turns that skip into a hard error there.
+**267 passing, 1 skipped** out of 268, against PostgreSQL 16. 207 unit and API
+tests need no database; 61 integration tests need one and skip without it, which
+is why CI sets `REQUIRE_DATABASE=1` and turns that skip into a hard error there.
 
 `tests/integration/review-findings.test.ts` is worth opening on its own. It is
 one test per defect that review found after this suite was already green — a

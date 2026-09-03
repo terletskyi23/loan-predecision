@@ -885,8 +885,9 @@ Metrics worth watching, in the order they matter:
 |---|---|
 | `predecision_outcomes_total{verdict}` | The engine's outcome mix. A spike in `MANUAL_REVIEW` means the policy or the bureau broke |
 | `review_outcomes_total{outcome}` | What humans decided. Counted **separately** — an engine counter cannot be revised hours later when a reviewer closes a case, so merging the two would make both wrong |
-| `bureau_reuse_ratio` | The primary deduplication signal. **Not proof** — it is a business ratio driven partly by traffic composition, it needs a baseline, and at a mostly-unique applicant mix it sits low enough that a total failure is a small absolute move. `bureau_pulls_total` against distinct subjects seen per TTL window is the direct detector and is the better alert once there is a baseline |
-| `bureau_pulls_total{result}` | Actual external calls, and their failures |
+| `bureau_lookups_total{result}` | How each lookup was satisfied: `reused`, `pulled`, `waited`, `unavailable`. **The deduplication ratio is derived from this, not exported as its own metric** — `reused` over the sum. Earlier drafts named a `bureau_reuse_ratio` gauge; a ratio is a query, and exporting it as a number would fix the denominator at scrape time |
+| — the ratio is **not proof** | It is a business figure driven partly by traffic composition, it needs a baseline, and at a mostly-unique applicant mix it sits low enough that a total failure is a small absolute move. `bureau_pulls_total` against distinct subjects seen per TTL window is the direct detector and the better alert once there is a baseline |
+| `bureau_pulls_total{outcome}` | Enquiries actually placed, by what came back: `found`, `no_hit`, `unavailable` — and `lost`, which counts a pull that succeeded at the bureau and whose report could not be stored. That last one is the expensive case: the applicant's file is marked and we have nothing to show for it |
 | `bureau_claim_contention_total` | How often two concurrent applications collapsed into one pull |
 | `bureau_wait_expired_total` | Losers that gave up waiting. Invisible otherwise — it looks exactly like a bureau outage and has the opposite fix |
 | `bureau_call_duration_seconds` | Histogram; p95 justifies the timeout |
