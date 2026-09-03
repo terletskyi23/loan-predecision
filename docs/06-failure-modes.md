@@ -90,10 +90,41 @@ optimism.
 The only deliverable that can fail for reasons unrelated to the code, so it is
 described here rather than assumed.
 
-**Shape.** One container image, one managed Postgres instance, one public HTTPS
-URL. The image is multi-stage and runs as a non-root user. Nothing in the design
-assumes a single instance — the correctness guarantees are database constraints,
-not process-local state — but v1 is deployed as one.
+**Shape.** One container image on **Render** (free web service), one managed
+Postgres on **Neon** (free project), one public HTTPS URL. The image is
+multi-stage, runs as a non-root user under `tini`, and `render.yaml` is
+committed so the deployment is a reviewable diff rather than dashboard state.
+Nothing in the design assumes a single instance — the correctness guarantees are
+database constraints, not process-local state — but v1 is deployed as one.
+
+**Why the database is not on Render.** Render's free Postgres is **deleted 30
+days after creation**. A take-home whose URL has to answer when somebody opens
+it a month later cannot sit on a database with an expiry date, so the two are
+split across providers: Render runs the service, Neon holds the data on a free
+project with no expiry. The cost is a second vendor and one extra hop; the
+alternative is a `503` at exactly the wrong moment.
+
+**Two connection strings, not one.** Neon fronts Postgres with a
+transaction-mode pooler. Application traffic uses the **pooled** string;
+migrations use the **direct** one, because `pg_advisory_xact_lock` is scoped to a
+transaction on a real session and a transaction-mode pooler does not preserve
+session state. Pointing the migration runner at the pooler produces a lock that
+appears to be taken and is not. The same limitation is why `LISTEN/NOTIFY` —
+named in `docs/02-idempotency.md` §8 as a way to remove the bounded wait's
+polling — is not simply a small improvement here.
+
+**Both providers scale to zero, so the first request is slow twice.** Render
+suspends a free instance after 15 minutes of inactivity and takes about a minute
+to restart; Neon suspends compute after 5 minutes and cannot be told not to.
+A reviewer's first call after a quiet period can therefore take tens of seconds,
+and the README says so rather than leaving them to guess.
+
+**Render's health check points at `/health/live`, not `/health/ready`.** Render
+restarts an instance whose health check fails, and readiness fails during a
+database outage — so pointing it at readiness would turn a Neon blip into a
+restart loop. That is precisely the failure the two probes are split to avoid,
+and it is the sort of thing that is obvious in a document and easy to get
+backwards in a dashboard.
 
 **Release procedure.**
 

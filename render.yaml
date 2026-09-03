@@ -1,0 +1,85 @@
+# Render blueprint. Committed so the deployment is reviewable in the repository
+# rather than living only in a dashboard — the same reason the policy lives in
+# git (ADR-0005): a change to how this runs should be a diff.
+#
+# The database is NOT declared here. Render's free Postgres is deleted 30 days
+# after creation, and this service has to still answer when someone opens the
+# URL a month from now. Postgres is a free Neon project instead, and its two
+# connection strings arrive as secrets below. docs/06-failure-modes.md,
+# Deployment, records that reasoning.
+
+services:
+  - type: web
+    name: loan-predecision
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+
+    # Match the Neon project's region. A cross-region hop costs 60-80 ms on
+    # every query, and docs/00-scope.md A2 budgets p95 under 2 s end to end.
+    region: oregon
+
+    # Liveness, not readiness. Render restarts an instance whose health check
+    # fails, and readiness fails during a database outage — pointing Render at
+    # /health/ready would turn a Neon blip into a restart loop, which is exactly
+    # the failure the two probes are split to avoid.
+    healthCheckPath: /health/live
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+
+      - key: POLICY_VERSION
+        value: 2026.09.1
+      - key: ENGINE_VERSION
+        value: 1.0.0
+
+      # The timing budget from docs/02-idempotency.md §4.4. These five only work
+      # together, and the boot refuses inconsistent combinations, so changing one
+      # here without the others is a failed deploy rather than a subtle bug.
+      - key: BUREAU_REPORT_TTL_MINUTES
+        value: 15
+      - key: BUREAU_TIMEOUT_MS
+        value: 800
+      - key: BUREAU_MAX_ATTEMPTS
+        value: 2
+      - key: BUREAU_BACKOFF_BASE_MS
+        value: 150
+      - key: BUREAU_CLAIM_LEASE_MS
+        value: 5000
+      - key: BUREAU_WAIT_MS
+        value: 2000
+      - key: BUREAU_WAIT_POLL_MS
+        value: 100
+
+      - key: IDEMPOTENCY_RETENTION_HOURS
+        value: 24
+      - key: IDEMPOTENCY_LEASE_SECONDS
+        value: 30
+      - key: ORPHAN_SWEEP_AFTER_MINUTES
+        value: 15
+      - key: ORPHAN_SWEEP_INTERVAL_MINUTES
+        value: 5
+
+      # sync: false keeps these out of the repository. Render asks for each one
+      # when the blueprint is first applied, and never reads them from here.
+      #
+      # DATABASE_URL       Neon POOLED connection string
+      # DATABASE_DIRECT_URL Neon DIRECT string (no -pooler in the host).
+      #                    Migrations need it: advisory locks are session-scoped
+      #                    and a transaction-mode pooler does not preserve them.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_DIRECT_URL
+        sync: false
+      - key: SUBJECT_KEY_PEPPER
+        sync: false
+      - key: API_TOKENS
+        sync: false
+      - key: REVIEWER_TOKENS
+        sync: false
+      - key: AUDITOR_TOKENS
+        sync: false
