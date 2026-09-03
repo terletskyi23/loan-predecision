@@ -24,7 +24,7 @@ reach nothing on its own.
 | **HTTP** | Routes, request schemas, auth, error mapping | Application |
 | **Application** | `ApplicationService`, idempotency, audit recording | Domain, Infrastructure |
 | **Domain** | `screen`, `decide`, policy, reason codes | **nothing** |
-| **Infrastructure** | Repositories, `BureauGateway`, resilience, clock | Postgres, mock bureau |
+| **Infrastructure** | Repositories, `BureauGateway`, resilience, clock, the policy loader | Postgres, mock bureau, `policies/` |
 
 The rule that carries the most weight is the third row. The engine receives an
 application, a bureau lookup and a policy, and returns a pre-decision. It does

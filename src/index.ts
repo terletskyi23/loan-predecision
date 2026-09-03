@@ -4,6 +4,7 @@ import { createDatabase } from './db/pool.js';
 import { runMigrations } from './db/migrate.js';
 import { createMetrics } from './metrics.js';
 import { buildServer } from './http/server.js';
+import { createFilePolicyStore } from './policy/loader.js';
 
 /**
  * Composition root. The only place that knows how the pieces fit together, and
@@ -29,6 +30,27 @@ if (config.MIGRATE_ON_BOOT) {
     logger.error({ err: error }, 'migration failed; refusing to serve against a half-migrated schema');
     process.exit(1);
   }
+}
+
+/**
+ * The configured policy is loaded and validated before a port is bound, for the
+ * same reason the environment is: a policy file that is well-formed JSON but
+ * incoherent would otherwise boot cleanly and fail on the first real
+ * application. `src/domain/policy.ts` explains what "incoherent" is checked to
+ * mean. Old versions are loaded lazily on replay; this only proves today's.
+ */
+const policies = createFilePolicyStore(config.POLICY_DIR);
+try {
+  const policy = await policies.get(config.POLICY_VERSION);
+  // policyVersion is already a base binding on the logger; what is worth adding
+  // is evidence the file was read and understood, not the version again.
+  logger.info(
+    { factors: policy.scorecard.factors.length, reasonCodes: policy.reasonCodes.registry.length },
+    'policy loaded',
+  );
+} catch (error) {
+  logger.error({ err: error }, 'policy is invalid or missing; refusing to serve without rules');
+  process.exit(1);
 }
 
 const database = createDatabase(config, logger);
