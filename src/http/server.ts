@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import type { Logger } from 'pino';
 import { ZodError } from 'zod';
 import type { Config } from '../config.js';
+import type { Database } from '../db/pool.js';
 import { CORRELATION_HEADER, correlationIdFrom } from './correlation.js';
 import { AppError, toProblem } from './problem.js';
 
@@ -14,6 +15,12 @@ declare module 'fastify' {
 export interface ServerDependencies {
   readonly config: Config;
   readonly logger: Logger;
+  /**
+   * Injected rather than imported so the HTTP layer never reaches for `pg`
+   * itself, and so the readiness probe can be tested against a database that is
+   * genuinely unreachable rather than a mock that pretends to be.
+   */
+  readonly database: Database;
 }
 
 /**
@@ -21,7 +28,7 @@ export interface ServerDependencies {
  * a concrete pino Logger narrows Fastify's logger generic, and widening it back
  * to the default would discard the typing on request.log.
  */
-export const buildServer = ({ config, logger }: ServerDependencies) => {
+export const buildServer = ({ config, logger, database }: ServerDependencies) => {
   const app = Fastify({
     loggerInstance: logger,
     // Behind Render's proxy, so the client address comes from the forwarded
@@ -66,6 +73,20 @@ export const buildServer = ({ config, logger }: ServerDependencies) => {
     // and a probe that checks a dependency turns an outage into a restart loop.
     // docs/06-failure-modes.md, Operational.
     return { status: 'ok' };
+  });
+
+  app.get('/health/ready', async (request) => {
+    // The split matters and is easy to get backwards. Readiness says "do not
+    // send me traffic"; liveness says "restart me". A database outage must
+    // produce the first and never the second, or the platform restarts healthy
+    // containers for the duration of someone else's incident.
+    try {
+      await database.ping();
+      return { status: 'ready' };
+    } catch (error) {
+      request.log.warn({ err: error, correlationId: request.correlationId }, 'readiness check failed');
+      throw new AppError('DATABASE_UNAVAILABLE', 'The database is not reachable.');
+    }
   });
 
   app.log.info({ nodeEnv: config.NODE_ENV }, 'server built');

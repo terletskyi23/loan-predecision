@@ -1,5 +1,6 @@
 import { loadConfigOrExit } from './config.js';
 import { createLogger } from './logger.js';
+import { createDatabase } from './db/pool.js';
 import { buildServer } from './http/server.js';
 
 /**
@@ -12,17 +13,25 @@ import { buildServer } from './http/server.js';
  */
 const config = loadConfigOrExit();
 const logger = createLogger(config);
-const app = buildServer({ config, logger });
+const database = createDatabase(config, logger);
+const app = buildServer({ config, logger, database });
 
+/**
+ * Order matters: stop accepting requests, then release the pool. Closing the
+ * pool first would fail every request still in flight.
+ */
 const shutdown = (signal: string): void => {
   logger.info({ signal }, 'shutting down');
-  void app.close().then(
-    () => process.exit(0),
-    (error: unknown) => {
-      logger.error({ err: error }, 'shutdown failed');
-      process.exit(1);
-    },
-  );
+  void app
+    .close()
+    .then(() => database.close())
+    .then(
+      () => process.exit(0),
+      (error: unknown) => {
+        logger.error({ err: error }, 'shutdown failed');
+        process.exit(1);
+      },
+    );
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

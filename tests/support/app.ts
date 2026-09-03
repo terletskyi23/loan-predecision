@@ -1,5 +1,6 @@
 import { pino } from 'pino';
 import { loadConfig, type Config } from '../../src/config.js';
+import type { Database } from '../../src/db/pool.js';
 import { buildServer } from '../../src/http/server.js';
 
 export const testConfig = (overrides: NodeJS.ProcessEnv = {}): Config =>
@@ -26,6 +27,16 @@ export const testConfig = (overrides: NodeJS.ProcessEnv = {}): Config =>
     ...overrides,
   });
 
+/** A database that answers. Enough for anything that is not about the database. */
+export const healthyDatabase = (): Database => ({
+  ping: async () => {},
+  close: async () => {},
+});
+
 /** Silent by default: a test suite that prints its own logs hides its failures. */
-export const testApp = (config: Config = testConfig()) =>
-  buildServer({ config, logger: pino({ level: 'silent' }) });
+export const testApp = (options: { config?: Config; database?: Database } = {}) =>
+  buildServer({
+    config: options.config ?? testConfig(),
+    logger: pino({ level: 'silent' }),
+    database: options.database ?? healthyDatabase(),
+  });
