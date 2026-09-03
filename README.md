@@ -82,9 +82,10 @@ npm run dev
 | `npm run openapi:check` | fails if the committed spec has drifted from the code |
 | `./demo.sh` | walks the interesting paths against a running instance |
 
-The service listens on `http://localhost:3000`. `./demo.sh` exercises what is
-built and prints `PENDING` for what is not, so it never quietly covers half of
-what this documentation promises. Point it anywhere:
+The service listens on `http://localhost:3000`, and serves its own reference at
+`/docs`. `./demo.sh` exercises what is built and prints `PENDING` for what is
+not, so it never quietly covers half of what this documentation promises — and
+each phase deletes one of those lines. Point it anywhere:
 
 ```bash
 BASE_URL=https://loan-predecision.onrender.com \
@@ -94,49 +95,43 @@ SUBMISSION_TOKEN=... AUDITOR_TOKEN=... ./demo.sh
 ### Trying the deployed instance
 
 **<https://loan-predecision.onrender.com/docs>** is the fastest way in: an
-interactive page generated from the route schemas, with an **Authorize** button
-for the demo token. The page is public; every call it makes still needs the
-token. `openapi.json` in the repository is the same contract, and CI fails if it
-drifts from the code — see ADR-0009.
+interactive reference generated from the route schemas, with an **Authorize**
+button for the demo token. The page is public; every call it makes still needs
+the token. `openapi.json` in the repository is the same contract, and CI fails
+if it drifts from the code — see ADR-0009.
 
 ```bash
-curl -sS -X POST "$BASE_URL/v1/applications" \
-  -H "Authorization: Bearer $DEMO_TOKEN" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -H 'Content-Type: application/json' \
-  -d @examples/approved-with-counter-offer.json | jq
+BASE_URL=https://loan-predecision.onrender.com
+
+curl -sS "$BASE_URL/health/live"                                  # {"status":"ok"}
+curl -sS "$BASE_URL/health/ready"                                 # {"status":"ready"} — reaches Neon
+curl -sS "$BASE_URL/metrics" -H "Authorization: Bearer $AUDITOR_TOKEN"
 ```
 
-`DEMO_TOKEN` is in the submission email — a throwaway credential for the review
-environment only. The endpoint is authenticated on purpose: it accepts a national
-identifier and can trigger a bureau enquiry, and an open endpoint would let
-anyone mark a stranger's credit file.
+`./demo.sh` runs every one of these and prints what is not built yet:
 
-**Every bureau profile is reachable by identifier.** The mock maps identifiers to
-fixed credit files, so a reviewer can reproduce any path with `curl` and nothing
-else — including the failures. The verdict also depends on the amount, term and
-declared income in the request, so the outcomes below assume the example bodies
-in `examples/`:
+```bash
+BASE_URL=https://loan-predecision.onrender.com \
+SUBMISSION_TOKEN=... AUDITOR_TOKEN=... ./demo.sh
+```
 
-| Identifier | What you get |
-|---|---|
-| `900-55-0142` | Approved with a counter-offer, score 75 |
-| `900-55-0221` | Declined, score 22 |
-| `900-55-0601` | Approved in full, score 100 |
-| `900-55-0301` | Referred · `THIN_FILE` — the score would have approved |
-| `900-55-0300` | Referred · `NO_CREDIT_FILE` — the bureau answered, there is no file |
-| `900-55-9001` | Referred · `BUREAU_UNAVAILABLE` — forced provider error |
+`DEMO_TOKEN` and `AUDITOR_TOKEN` are in the submission email — throwaway
+credentials for the review environment only. The endpoints are authenticated on
+purpose: this service accepts a national identifier and can trigger a bureau
+enquiry, and an open endpoint would let anyone mark a stranger's credit file.
 
-Full catalogue and attribute values in
-[`docs/08-mock-bureau.md`](docs/08-mock-bureau.md) §4.
+> **Not built yet.** `POST /v1/applications`, the status and review endpoints,
+> and everything under `/v1/audit/` are documented in
+> [`05-api.md`](docs/05-api.md) and are the subject of the next phase. This
+> section only shows commands that work against the deployed instance today;
+> `./demo.sh` lists the rest as `PENDING` rather than letting you discover them
+> with a 404.
 
 > **The first request after a quiet period is slow twice.** Render suspends a
 > free instance after 15 minutes of inactivity and takes about a minute to wake;
 > Neon suspends its compute after 5 and cannot be told not to on the free plan.
 > Expect tens of seconds on the first call and single-digit milliseconds after.
 > `GET /health/ready` is the cheapest way to warm both.
-
----
 
 ## Documentation
 
