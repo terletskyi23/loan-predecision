@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { pino } from 'pino';
-import { Pool, type PoolClient } from 'pg';
+import { Pool, type PoolClient, type QueryResultRow } from 'pg';
 import { runMigrations } from '../../src/db/migrate.js';
+import type { Database, Queryable } from '../../src/db/pool.js';
 import { testConfig } from './app.js';
 
 /**
@@ -168,3 +169,36 @@ export const expectPgError = async (
   }
   throw new Error(`expected Postgres error ${code}, but the statement succeeded`);
 };
+
+/**
+ * A `Database` backed by the test pool, so an integration test drives the real
+ * repositories rather than a stand-in for them. Transactions are real
+ * transactions on a real client, which is the entire reason these suites need
+ * Postgres and not a fake.
+ */
+export const testDatabase = (): Database => ({
+  ping: async () => {
+    await onClient((client) => client.query('SELECT 1'));
+  },
+  close: async () => {},
+  query: async <T extends QueryResultRow>(text: string, values?: readonly unknown[]) =>
+    onClient((client) => client.query<T>(text, values as unknown[] | undefined)),
+  transaction: async <T>(work: (tx: Queryable) => Promise<T>): Promise<T> => {
+    if (!pool) throw new Error('no database');
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await work({
+        query: async <R extends QueryResultRow>(text: string, values?: readonly unknown[]) =>
+          client.query<R>(text, values as unknown[] | undefined),
+      });
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+});

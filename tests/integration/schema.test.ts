@@ -391,6 +391,7 @@ describe.skipIf(!withDatabase)('the constraints that carry correctness', () => {
       expect(rows.map((r) => r.filename)).toEqual([
         '001_init.sql',
         '002_reason_codes_depend_on_verdict.sql',
+        '003_claim_carries_the_failure_cause.sql',
       ]);
       for (const row of rows) expect(row.checksum).toMatch(/^[0-9a-f]{64}$/);
     });
