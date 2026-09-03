@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { canonicaliseNationalId } from '../../src/domain/identifier.js';
 import { CATALOGUE, CHOICE_LISTS, PROFILES, derivedAttributes, lookupCatalogue } from '../../src/bureau/profiles.js';
+import { score } from '../../src/domain/scorecard.js';
+import { createFilePolicyStore } from '../../src/policy/loader.js';
 
 /**
  * docs/08-mock-bureau.md §4 and §5.
@@ -10,10 +12,9 @@ import { CATALOGUE, CHOICE_LISTS, PROFILES, derivedAttributes, lookupCatalogue }
  * identifier yields the same file forever, three spellings are one subject, and
  * every documented outcome is reachable with the identifier the document names.
  *
- * WHAT IS NOT HERE YET. docs/08 §4 also publishes a table of resulting SCORES,
- * and re-deriving it needs the scorecard evaluator — `decide(...)`, which does
- * not exist. The `it.todo` at the end of this file is that obligation, left
- * visible in the test output rather than in a comment nobody runs.
+ * The score table in docs/08 §4 is re-derived at the end of this file from the
+ * profile attributes and the shipped policy's bands, so the document cannot
+ * drift from the catalogue.
  */
 
 describe('canonicalisation is what makes deduplication work', () => {
@@ -177,4 +178,21 @@ describe('an identifier nobody documented still gets a stable answer', () => {
   });
 });
 
-it.todo('re-derives the docs/08 §4 score table from policies/2026.09.1.json — needs the scorecard evaluator');
+describe('the docs/08 §4 score table is re-derived, not asserted', () => {
+  it.each([
+    ['CLEAN_MODERATE', 75],
+    ['ADVERSE_HISTORY', 22],
+    ['PRIME', 100],
+    ['REFERRAL_BAND', 59],
+    ['THIN', 73],
+    ['NAME_MISMATCH', 94],
+  ] as const)('%s scores %i under the shipped policy', async (profile, total) => {
+    // The table in the document cannot drift from the catalogue, because this
+    // recomputes it from the profile's attributes and the policy's bands rather
+    // than repeating a number somebody typed. RECENT_BANKRUPTCY is absent from
+    // the table on purpose: it terminates at D2, before the scorecard runs.
+    const policy = await createFilePolicyStore('./policies').get('2026.09.1');
+    const report = { provider: 'MOCKBUREAU', pulledAt: new Date(0), ...PROFILES[profile] };
+    expect(score(report, policy).total).toBe(total);
+  });
+});
