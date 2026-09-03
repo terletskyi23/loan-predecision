@@ -233,6 +233,13 @@ export const preDecisionListSchema = z
     preDecisions: z.array(
       z.object({
         applicationId: z.string().uuid(),
+        /**
+         * A keyed hash of the applicant, stable across their applications. This
+         * is what makes "did this person apply eleven times this week" an
+         * answerable audit question — and it makes the export pseudonymous
+         * personal data rather than de-identified data. Auditor scope only.
+         */
+        subjectKey: z.string(),
         verdict: z.string(),
         reasonCodes: z.array(z.string()),
         score: z.number().int().nullable(),

@@ -313,6 +313,31 @@ describe.skipIf(!withDatabase)('what the review found', () => {
     });
   });
 
+  describe('the auditor listing carries what makes it an audit', () => {
+    it('returns the subject key, so one person\'s applications can be linked', async () => {
+      // docs/04 §4 argues for this at length — "did this person apply eleven
+      // times this week" is the audit question a listing exists to answer — and
+      // states the consequence rather than hiding behind it: a keyed hash is
+      // pseudonymous personal data. The code was quietly omitting the field, so
+      // the reasoning in the document described something that did not ship.
+      const server = await app();
+      await post(server, submission(), 'list-1');
+      await post(server, submission({ requestedAmountMinor: 2_000_000 }), 'list-2');
+
+      const listed = await server.inject({
+        method: 'GET',
+        url: '/v1/audit/pre-decisions?limit=10',
+        headers: { authorization: `Bearer ${TOKENS.auditor}` },
+      });
+
+      const keys = listed.json().preDecisions.map((row: { subjectKey: string }) => row.subjectKey);
+      expect(keys).toHaveLength(2);
+      expect(new Set(keys).size, 'one applicant, one subject key across both applications').toBe(1);
+      expect(keys[0]).toMatch(/^[0-9a-f]{64}$/);
+      await server.close();
+    });
+  });
+
   describe('consent', () => {
     it('returns the documented code when the attestation is false', async () => {
       // CONSENT_REQUIRED was in the catalogue and unreachable: the schema used

@@ -92,16 +92,27 @@ export const findPreDecision = async (db: Queryable, applicationId: string): Pro
   return row === undefined ? null : toRecord(row);
 };
 
+/**
+ * The auditor listing, joined to the subject key.
+ *
+ * The key is what makes "did this person apply eleven times this week" an
+ * answerable audit question, and that linkage is the whole reason a listing
+ * exists. docs/04 §4 states the consequence rather than hiding behind it: a
+ * keyed hash is pseudonymous personal data, not de-identified data, and the
+ * export is scoped to the auditor token and covered by the same retention rules
+ * as everything else.
+ */
 export const listPreDecisions = async (
   db: Queryable,
   options: { limit: number; before?: Date },
-): Promise<readonly PreDecisionRecord[]> => {
-  const { rows } = await db.query<Row>(
-    `SELECT * FROM pre_decisions
-      WHERE ($2::timestamptz IS NULL OR decided_at < $2)
-      ORDER BY decided_at DESC, application_id
+): Promise<readonly (PreDecisionRecord & { subjectKey: string })[]> => {
+  const { rows } = await db.query<Row & { subject_key: string }>(
+    `SELECT p.*, a.subject_key
+       FROM pre_decisions p JOIN applications a ON a.id = p.application_id
+      WHERE ($2::timestamptz IS NULL OR p.decided_at < $2)
+      ORDER BY p.decided_at DESC, p.application_id
       LIMIT $1`,
     [options.limit, options.before ?? null],
   );
-  return rows.map(toRecord);
+  return rows.map((row) => ({ ...toRecord(row), subjectKey: row.subject_key }));
 };

@@ -118,6 +118,7 @@ export const createAuditService = (options: { database: Database; policies: Poli
       return {
         preDecisions: rows.map((row) => ({
           applicationId: row.applicationId,
+          subjectKey: row.subjectKey,
           verdict: row.verdict,
           reasonCodes: [...row.reasonCodes],
           score: row.score,

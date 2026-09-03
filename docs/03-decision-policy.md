@@ -154,10 +154,10 @@ is present and outside every band.
 
 In `policies/2026.09.1.json` every factor's bands are in fact exhaustive over
 its declared domain, so `default` is unreachable there. It is specified anyway,
-and tested against `policies/test.json` where a deliberate gap exists, because
-"the current file happens to be total" is a property of one file rather than of
-the format — and the next policy version is written by a risk owner, not by the
-author of the evaluator.
+and `tests/unit/policy.test.ts` exercises the fall-through against an inline
+policy with a deliberate gap, because "the current file happens to be total" is
+a property of one file rather than of the format — and the next policy version
+is written by a risk owner, not by the author of the evaluator.
 
 Bands live in `policies/<version>.json`; nothing is hardcoded in the engine.
 

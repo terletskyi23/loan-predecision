@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { policySchema } from '../../src/domain/policy.js';
+import { policySchema, type Policy } from '../../src/domain/policy.js';
+import { score } from '../../src/domain/scorecard.js';
+import type { CompleteBureauReport } from '../../src/domain/bureau-lookup.js';
 import { createFilePolicyStore, PolicyLoadError } from '../../src/policy/loader.js';
 
 /**
@@ -171,5 +173,59 @@ describe('a file that is well-formed JSON and not a policy', () => {
         (p['products'] as { P: { autoApproveCeilingMinor: number } }).P.autoApproveCeilingMinor = 50;
       }),
     ).toMatch(/nothing is ever approved automatically/);
+  });
+});
+
+describe('a band table with a gap falls through to `default`', () => {
+  // docs/03 §2. In policies/2026.09.1.json every factor is exhaustive over its
+  // declared domain, so `default` is unreachable there — which is a property of
+  // ONE FILE and not of the format. The next policy version is written by a risk
+  // owner, so the fall-through is specified and exercised here against a policy
+  // with a deliberate hole rather than left to be discovered in production.
+  const withGap = (): Policy => {
+    const policy = valid();
+    const scorecard = policy['scorecard'] as { factors: { bands: unknown[] }[] };
+    // 30 and above matches nothing: the only bands are `lt: 30` and `lt: 10`.
+    scorecard.factors[0]!.bands = [
+      { lt: 10, points: 30 },
+      { lt: 30, points: 20 },
+    ];
+    const parsed = policySchema.safeParse(policy);
+    if (!parsed.success) throw new Error(parsed.error.message);
+    return parsed.data;
+  };
+
+  const report = (utilisation: number): CompleteBureauReport => ({
+    provider: 'MOCKBUREAU',
+    pulledAt: new Date(0),
+    subjectMatch: { nameMatches: true, dateOfBirthMatches: true },
+    hasActiveDelinquency: false,
+    monthsSinceBankruptcy: null,
+    monthsSinceChargeOff: null,
+    worstDelinquencyLast24m: 'NONE',
+    revolvingUtilizationPct: utilisation,
+    oldestAccountAgeMonths: 60,
+    hardInquiriesLast6m: 0,
+    distinctAccountTypes: 3,
+    totalAccounts: 5,
+    monthlyObligationsMinor: 0,
+  });
+
+  it('awards `default` when no band matches a value that is present', () => {
+    const awarded = score(report(55), withGap()).awards[0];
+    expect(awarded?.awarded).toBe(0);
+    expect(awarded?.fellThrough, 'and says so, so an audit can tell a fall-through from a real zero').toBe(true);
+  });
+
+  it('does not fall through when a band does match', () => {
+    const awarded = score(report(5), withGap()).awards[0];
+    expect(awarded?.awarded).toBe(30);
+    expect(awarded?.fellThrough).toBe(false);
+  });
+
+  it('never reaches `default` for a MISSING value — that is D1\'s job', () => {
+    // A gap in the data is BUREAU_DATA_INCOMPLETE, not a zero. `default` covers
+    // only a value that is present and outside every band.
+    expect(() => score({ ...report(5), revolvingUtilizationPct: undefined }, withGap())).toThrow(/must reject an incomplete report/);
   });
 });

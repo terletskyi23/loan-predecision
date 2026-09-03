@@ -276,9 +276,17 @@ block it.
 
 ## 6. Logging, and what must never appear in it
 
-Structured JSON via `pino`. Every line carries `correlationId`,
-`applicationId`, `clientId`, `policyVersion`, and `subjectKeyPrefix` — the first
-eight characters of the hash, enough to correlate, not enough to identify.
+Structured JSON via `pino`. Every line carries `policyVersion` and
+`engineVersion` as base bindings; `correlationId`, `applicationId` and
+`clientId` appear on the lines that have them.
+
+**What is not there, stated rather than implied:** `subjectKeyPrefix` — the
+first eight characters of the hash, enough to correlate a person's requests
+across log lines and not enough to identify them — is described in an earlier
+draft of this section and is not implemented, and the three request fields are
+not base bindings, so a line emitted outside a request handler carries none of
+them. Correlating one applicant's requests in the logs is therefore harder than
+this section originally claimed. The redaction below is real.
 
 Never logged: the national identifier, full name, contact details, or the raw
 bureau payload. Redaction is configured on the logger's serialisers, not left to

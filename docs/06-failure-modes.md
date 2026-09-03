@@ -187,47 +187,55 @@ separately in the first place.
 
 Every row above, in order, against the test that covers it. `named` means
 understood and deliberately not tested in v1 — the list is long on purpose, and
-a short honest list beats a long optimistic one. `docs/07-testing.md` §7
-criterion 2 is a check against this table, which is why it can be a grep.
+a short honest list beats a long optimistic one.
+
+**This table was wrong until phase 3 closed, and the way it was wrong is worth
+recording.** It named ten test files that did not exist — `integration/dedup`,
+`integration/idempotency`, `integration/atomicity`, `integration/orphan-sweeper`,
+`unit/lookup-gate` and others — written from the design before the tests, and
+never reconciled. `docs/07` §7 criterion 2 describes a grep against this table
+precisely so that could not happen; the grep was never written, so nothing
+noticed. The names below are now the files that exist, and several rows moved
+from a fictional test to an honest `named`.
 
 | Row | Covered by |
 |---|---|
-| Bureau `5xx` / timeout | `integration/bureau-resilience` — retries then `MANUAL_REVIEW` |
+| Bureau `5xx` / timeout | `unit/bureau-provider`, `integration/vertical-slice` — retries, then `MANUAL_REVIEW` with the cause recorded |
 | Bureau slow but succeeding | `named` — no latency test |
-| Bureau `4xx` | `integration/bureau-resilience` — zero retries |
+| Bureau `4xx` | `named` — the provider contract has no 4xx to express, so the rule cannot be implemented or tested. See `docs/02` §6 |
 | Bureau down for hours | `named` — no circuit breaker |
-| Bureau no file | `unit/lookup-gate`, `integration/dedup` — `NO_HIT` stored and reused |
-| Report missing an attribute | `unit/lookup-gate` — `BUREAU_DATA_INCOMPLETE` |
+| Bureau no file | `unit/engine`, `integration/vertical-slice` — `NO_HIT` stored and reused |
+| Report missing an attribute | `unit/engine` — `BUREAU_DATA_INCOMPLETE`, in both directions |
 | Nonsense but well-formed report | `named` — no plausibility checks |
 | Postgres unreachable | `api/health` — ready `503`, live `200` |
 | Pool exhausted | `named` |
-| Failure between pre-decision and audit insert | `integration/atomicity` |
+| Failure between pre-decision and audit insert | `named` — no failure injection between the two writes; the transaction boundary is asserted by inspection only |
 | Migration fails on boot | `named` — CI runs forward migrations only |
 | Two instances both migrate | `named` — advisory lock not exercised in CI |
-| Retry after a network blip | `integration/idempotency` — byte-identical replay |
-| One key, different bodies | `integration/idempotency` — `422` |
-| Two integrators, same key string | `integration/idempotency` — cross-client isolation |
-| Two concurrent applications, one person | `integration/dedup` — exactly one pull |
-| Winner fails while a loser waits | `integration/dedup` — loser adopts the real cause |
-| Loser's wait expires | `integration/dedup` — late report is used |
-| Claim holder crashes | `integration/dedup` — lease takeover |
-| Process dies mid-pull, no retry | `integration/orphan-sweeper` |
-| Retry after the sweep | `integration/orphan-sweeper` — fresh application, no second pull |
+| Retry after a network blip | `integration/vertical-slice` — byte-identical replay |
+| One key, different bodies | `integration/vertical-slice` — `422` |
+| Two integrators, same key string | `integration/review-findings` — two clients, one key string, two applications |
+| Two concurrent applications, one person | `integration/vertical-slice` — six concurrent applications, one pull |
+| Winner fails while a loser waits | `named` — the mechanism exists (migration 003) and no test races a winner against a waiter |
+| Loser's wait expires | `named` — the re-read exists in the gateway and is not raced in a test |
+| Claim holder crashes | `named` — the takeover predicate is exercised only by the schema test |
+| Process dies mid-pull, no retry | `integration/review-findings` — abandoned, key released, chain closed |
+| Retry after the sweep | `named` — the `ABANDONED` branch of the key CAS exists and is not exercised end to end |
 | Slow-but-alive holder loses its lease | `named` — unfenced by decision |
-| Dedup silently stops working | `api/metrics` — `bureau_reuse_ratio` moves on reuse |
-| Two submissions, no key | `integration/idempotency` — two applications, one pull |
-| Two reviewers close at once | `integration/review` — one write, one `409` |
+| Dedup silently stops working | `named` — the counters move; nothing asserts on them |
+| Two submissions, no key | `integration/vertical-slice` — two applications, one pull |
+| Two reviewers close at once | `integration/vertical-slice` — one write, one `409` |
 | Policy change shifts outcomes | `named` — no backtesting |
 | Review queue grows | `named` — no queue in this service |
-| Old policy file deleted | `unit/policy-loader` — historical files still parse |
-| Engine change alters an old verdict | `integration/replay` — newer policy is not used |
-| Human overrides the engine | `integration/replay` — still `match: true` |
+| Old policy file deleted | `unit/policy` — a missing version is reported as missing, and a version string cannot become a path |
+| Engine change alters an old verdict | `named` — replay loads the recorded version; no test ships a second policy file to prove it |
+| Human overrides the engine | `integration/vertical-slice` — a human override still replays as a match |
 | Thresholds drift | `named` |
 | Submission token leaks | `named` |
 | Reviewer token leaks | `named` |
-| Audit row edited directly | `integration/audit-chain` — broken at the right index |
+| Audit row edited directly | `integration/review-findings` — an altered row is detected at the right index |
 | Whole chain rewritten | `named` — needs an external anchor |
-| Chain truncated | `named` — same anchor |
+| Chain truncated | `integration/review-findings` — asserts the chain does NOT detect it, and reports the count an anchor would compare |
 | Pepper rotated carelessly | `named` |
 | Caller attests consent it never captured | `named` — unknowable here by construction |
 | Personal data in logs | `named` — no automated PII scan |

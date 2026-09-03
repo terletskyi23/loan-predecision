@@ -29,11 +29,13 @@ such a substitute would pass while proving nothing.
 
 ## 2. Fixtures and mechanics
 
-**The clock is injected.** `FixedClock` starts at a fixed instant and moves only
-when told. TTL expiry, lease expiry, offer expiry, consent staleness and the
-orphan sweeper are tested by advancing it, never by sleeping. A `Date.now()`
-anywhere in the domain layer would make these tests impossible, which is why the
-rule exists.
+**The clock is injected.** `screen` and `decide` take `now` as an argument, and
+every engine test pins it (`tests/support/engine-fixtures.ts` exports one
+instant). Services take a `now` factory. There is no `FixedClock` helper — an
+earlier version of this document described one, and the tests that would have
+needed it (TTL expiry, lease expiry, a sweep advancing through time) are written
+by staging rows with explicit timestamps instead. The rule about `Date.now()` in
+the domain is real and enforced by lint; the fixture was aspirational.
 
 **Builders, not literals.** `anApplication({ requestedAmountMinor: 3_200_000 })`
 and `aBureauReport({ revolvingUtilizationPct: 34 })` return valid defaults with
@@ -45,9 +47,18 @@ IDENTITY CASCADE` between cases. `fileParallelism` is off in `vitest.config.ts`
 so one file's truncate cannot wipe another file's fixtures mid-run. Concurrency
 inside a single test is explicit and intended.
 
-**A dedicated policy fixture.** Unit tests load `policies/test.json` with round
-numbers, so an assertion never depends on a production threshold that risk may
-change tomorrow. The real policy files get their own validation test instead.
+**Engine tests run against the SHIPPED policy, deliberately.** An earlier
+version of this document specified a `policies/test.json` with round numbers so
+no assertion would depend on a threshold risk might change. That file does not
+exist, and on reflection it should not: the worked examples in `docs/03` §5 and
+`docs/05` §3 are stated in production numbers, and a fixture policy would let
+those documents drift from the engine without a test noticing. The trade-off is
+the intended one — a risk owner editing a band breaks the engine tests, loudly,
+which is what should happen when the published examples stop being true.
+
+`tests/unit/policy.test.ts` uses a minimal inline policy for the *schema*
+refinements, where the point is a deliberately broken file rather than a
+realistic one.
 
 ---
 
