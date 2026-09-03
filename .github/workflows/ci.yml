@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck, lint, tests
+    runs-on: ubuntu-latest
+
+    # A real Postgres, not a simulated one. The properties that matter most in
+    # this service are unique constraints and transaction rollback, and those
+    # are exactly what an in-memory substitute would pass while proving nothing
+    # (docs/07-testing.md §1).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: predecision
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d predecision"
+          --health-interval=2s
+          --health-timeout=3s
+          --health-retries=30
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/predecision
+      DATABASE_DIRECT_URL: postgres://postgres:postgres@localhost:5432/predecision
+      SUBJECT_KEY_PEPPER: ci-pepper-value-long-enough-to-satisfy-the-schema
+      API_TOKENS: acme-web:ci-submission-token
+      REVIEWER_TOKENS: underwriting:ci-reviewer-token
+      AUDITOR_TOKENS: compliance:ci-auditor-token
+      POLICY_VERSION: 2026.09.1
+      ENGINE_VERSION: 1.0.0
+      BUREAU_REPORT_TTL_MINUTES: 15
+      BUREAU_TIMEOUT_MS: 800
+      BUREAU_MAX_ATTEMPTS: 2
+      BUREAU_BACKOFF_BASE_MS: 150
+      BUREAU_CLAIM_LEASE_MS: 5000
+      BUREAU_WAIT_MS: 2000
+      BUREAU_WAIT_POLL_MS: 100
+      IDEMPOTENCY_RETENTION_HOURS: 24
+      IDEMPOTENCY_LEASE_SECONDS: 30
+      ORPHAN_SWEEP_AFTER_MINUTES: 15
+      ORPHAN_SWEEP_INTERVAL_MINUTES: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Not a style gate. This guards one architectural invariant: src/domain/**
+      # may not import pg, fastify, a logger, the infrastructure layers, or any
+      # node: builtin. That boundary is what makes a pre-decision replayable,
+      # and it is the one rule no test can catch — a domain function that opens
+      # its own connection still passes its unit tests and fails only later, in
+      # replay. See ADR-0008.
+      - name: Lint (architecture boundary)
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+  image:
+    name: container image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # The image is built here and nowhere else before deployment, so this job
+      # is the only thing standing between a broken Dockerfile and a failed
+      # deploy. It is a separate job because a red image build and a red test
+      # run are different problems and should be visible as different failures.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          load: true
+          tags: loan-predecision:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A built image that cannot start is not a built image. This runs the same
+      # artefact the deployment runs and asserts the liveness probe answers.
+      - name: Boot the image and probe liveness
+        run: |
+          docker run -d --name probe -p 3000:3000 \
+            -e SUBJECT_KEY_PEPPER=ci-pepper-value-long-enough-to-satisfy-the-schema \
+            -e DATABASE_URL=postgres://u:p@127.0.0.1:5432/db \
+            -e API_TOKENS=acme-web:t1 \
+            -e REVIEWER_TOKENS=underwriting:t2 \
+            -e AUDITOR_TOKENS=compliance:t3 \
+            -e POLICY_VERSION=2026.09.1 \
+            -e ENGINE_VERSION=1.0.0 \
+            -e BUREAU_REPORT_TTL_MINUTES=15 \
+            -e BUREAU_TIMEOUT_MS=800 \
+            -e BUREAU_MAX_ATTEMPTS=2 \
+            -e BUREAU_BACKOFF_BASE_MS=150 \
+            -e BUREAU_CLAIM_LEASE_MS=5000 \
+            -e BUREAU_WAIT_MS=2000 \
+            -e BUREAU_WAIT_POLL_MS=100 \
+            -e IDEMPOTENCY_RETENTION_HOURS=24 \
+            -e IDEMPOTENCY_LEASE_SECONDS=30 \
+            -e ORPHAN_SWEEP_AFTER_MINUTES=15 \
+            -e ORPHAN_SWEEP_INTERVAL_MINUTES=5 \
+            loan-predecision:ci
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/health/live; then echo; ok=1; break; fi
+            sleep 1
+          done
+          if [ "${ok:-}" != "1" ]; then echo "liveness never answered"; docker logs probe; exit 1; fi
+
+      # A config failure must stop the process before it binds a port, so a
+      # misconfiguration is a failed deploy rather than a service answering
+      # requests insecurely (docs/06-failure-modes.md, Deployment).
+      - name: A missing secret must refuse to start
+        run: |
+          if docker run --rm -e DATABASE_URL=postgres://u:p@127.0.0.1:5432/db loan-predecision:ci; then
+            echo "the image started without SUBJECT_KEY_PEPPER, which it must never do"
+            exit 1
+          fi
+          echo "refused to start, as designed"
