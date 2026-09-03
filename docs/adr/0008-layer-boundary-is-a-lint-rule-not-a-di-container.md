@@ -66,6 +66,23 @@ only later, in replay, years after the decision it made.
 - Adding a legitimate domain dependency now requires editing
   `eslint.config.js` — a deliberate act, visible in the diff, and the right
   amount of friction.
+
+  **Amended in phase 3, because as first written this consequence was not
+  true.** The rule was a denylist: it named `pg`, `fastify`, `pino`,
+  `prom-client`, four directories and `node:*`. Everything it had not thought of
+  was permitted, so `import axios from 'axios'` in a scorecard file passed
+  silently — and an HTTP client in the domain is the exact failure the boundary
+  exists to prevent. It now forbids every bare package import and names the two
+  the domain may have: `zod`, which validates a value already in memory, and
+  `decimal.js`, which is arithmetic. Neither reads a clock, a file or a socket,
+  which is the only property being protected. The change also closed
+  `src/config.ts`, `src/logger.ts` and `src/metrics.ts`, which the directory
+  patterns had missed: a domain function that reads configuration has taken a
+  dependency on the environment it runs in and is no longer replayable from
+  stored inputs.
+
+  Recorded here rather than quietly fixed, because the gap is the more
+  instructive artefact: a rule written to enforce a boundary enforced a list.
 - A lint step exists in CI. `docs/07-testing.md` §8 is updated accordingly.
 - The composition root is hand-written. That is a small ongoing cost paid every
   time a new dependency is introduced, and it is the cost NestJS would have

@@ -9,3 +9,8 @@ coverage/
 .vscode/
 .idea/
 .neon
+
+# Vitest writes these while resolving vitest.config.ts and normally removes them
+# again. One sandbox that cannot unlink left three of them behind and `git add -A`
+# committed them. Ignored so a build artefact cannot become a source file twice.
+vitest.config.ts.timestamp-*.mjs
