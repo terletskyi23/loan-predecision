@@ -35,6 +35,11 @@ jobs:
 
     env:
       NODE_ENV: test
+
+      # Turns "no database, so skip the integration suite" into a hard error.
+      # A green pipeline must not be able to mean "those tests quietly did not
+      # run" — tests/support/db.ts refuses rather than skips when this is set.
+      REQUIRE_DATABASE: '1'
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/predecision
       DATABASE_DIRECT_URL: postgres://postgres:postgres@localhost:5432/predecision
       SUBJECT_KEY_PEPPER: ci-pepper-value-long-enough-to-satisfy-the-schema
@@ -76,6 +81,12 @@ jobs:
       # replay. See ADR-0008.
       - name: Lint (architecture boundary)
         run: npm run lint
+
+      # Runs the documented command rather than trusting that the suite's own
+      # setup covers it. README tells a reviewer to run `npm run migrate`, so CI
+      # proves that command works.
+      - name: Migrate
+        run: npm run migrate
 
       - name: Tests
         run: npm test

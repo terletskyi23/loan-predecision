@@ -1,6 +1,7 @@
 import { loadConfigOrExit } from './config.js';
 import { createLogger } from './logger.js';
 import { createDatabase } from './db/pool.js';
+import { runMigrations } from './db/migrate.js';
 import { buildServer } from './http/server.js';
 
 /**
@@ -13,6 +14,22 @@ import { buildServer } from './http/server.js';
  */
 const config = loadConfigOrExit();
 const logger = createLogger(config);
+
+/**
+ * Migrations before anything binds a port. A half-migrated schema serving
+ * requests is worse than a failed deploy, so this either succeeds or the
+ * process exits — docs/06-failure-modes.md, Database.
+ */
+if (config.MIGRATE_ON_BOOT) {
+  try {
+    const result = await runMigrations(config, logger);
+    logger.info(result, 'schema ready');
+  } catch (error) {
+    logger.error({ err: error }, 'migration failed; refusing to serve against a half-migrated schema');
+    process.exit(1);
+  }
+}
+
 const database = createDatabase(config, logger);
 const app = buildServer({ config, logger, database });
 

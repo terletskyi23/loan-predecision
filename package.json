@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "migrate": "tsx src/db/migrate.ts",
+    "migrate:prod": "node dist/db/migrate.js",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:watch": "vitest"

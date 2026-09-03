@@ -45,6 +45,11 @@ COPY package.json ./
 # deleted because replay loads the version a decision was made under (ADR-0005).
 COPY policies ./policies
 
+# Migrations run on boot under an advisory lock, so the SQL has to travel with
+# the image. The ledger's checksum column refuses a file that changed after it
+# was applied, which is what makes shipping them safe.
+COPY migrations ./migrations
+
 # node:alpine ships an unprivileged `node` user. Running as root would mean a
 # code-execution bug in a dependency owns the container.
 USER node
