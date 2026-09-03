@@ -1,0 +1,66 @@
+# Local development and the integration test suite.
+#
+# `docker compose up -d db` is enough for `npm run dev` and `npm test`: the
+# tests need a real Postgres, not a simulated one, because the properties that
+# matter here are unique constraints and transaction rollback — the two things
+# an in-memory substitute cannot do (docs/07-testing.md §1).
+#
+# The `app` service exists so a reviewer can bring the whole thing up with one
+# command and exercise the same image the deployment runs.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: predecision
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `app` must not start against a database that is still initialising:
+      # migrations run on boot and a refused connection is a failed deploy.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d predecision']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgres://postgres:postgres@db:5432/predecision
+      # No pooler in front of local Postgres, so the direct URL is the same one.
+      # On a managed provider these differ, and migrations need the direct
+      # string because advisory locks are session-scoped.
+      DATABASE_DIRECT_URL: postgres://postgres:postgres@db:5432/predecision
+      SUBJECT_KEY_PEPPER: local-development-pepper-not-for-any-real-deployment
+      API_TOKENS: acme-web:local-submission-token
+      REVIEWER_TOKENS: underwriting:local-reviewer-token
+      AUDITOR_TOKENS: compliance:local-auditor-token
+      POLICY_VERSION: 2026.09.1
+      ENGINE_VERSION: 1.0.0
+      BUREAU_REPORT_TTL_MINUTES: 15
+      BUREAU_TIMEOUT_MS: 800
+      BUREAU_MAX_ATTEMPTS: 2
+      BUREAU_BACKOFF_BASE_MS: 150
+      BUREAU_CLAIM_LEASE_MS: 5000
+      BUREAU_WAIT_MS: 2000
+      BUREAU_WAIT_POLL_MS: 100
+      IDEMPOTENCY_RETENTION_HOURS: 24
+      IDEMPOTENCY_LEASE_SECONDS: 30
+      ORPHAN_SWEEP_AFTER_MINUTES: 15
+      ORPHAN_SWEEP_INTERVAL_MINUTES: 5
+    ports:
+      - '3000:3000'
+
+volumes:
+  pgdata:
