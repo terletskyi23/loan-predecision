@@ -18,7 +18,10 @@
     "migrate:prod": "node dist/db/migrate.js",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
-    "test:watch": "vitest"
+    "test:integration": "vitest run tests/integration",
+    "test:api": "vitest run tests/api",
+    "test:watch": "vitest",
+    "demo": "./demo.sh"
   },
   "dependencies": {
     "fastify": "^5.2.0",

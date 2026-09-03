@@ -108,6 +108,33 @@ describe('configuration', () => {
     });
   });
 
+  describe('booleans are parsed, not coerced', () => {
+    // z.coerce.boolean() uses JavaScript truthiness, so the string 'false'
+    // becomes true — and MIGRATE_ON_BOOT=false would be silently ignored while
+    // migrations ran anyway. An environment variable is always a string.
+    it.each([
+      ['false', false],
+      ['0', false],
+      ['no', false],
+      ['off', false],
+      ['', false],
+      ['true', true],
+      ['1', true],
+      ['yes', true],
+      ['TRUE', true],
+    ])('reads MIGRATE_ON_BOOT=%s as %s', (raw, expected) => {
+      expect(loadConfig({ ...valid(), MIGRATE_ON_BOOT: raw }).MIGRATE_ON_BOOT).toBe(expected);
+    });
+
+    it('defaults to true when unset', () => {
+      expect(loadConfig(valid()).MIGRATE_ON_BOOT).toBe(true);
+    });
+
+    it('refuses a value it cannot interpret rather than guessing', () => {
+      failsOn({ ...valid(), MIGRATE_ON_BOOT: 'maybe' }, 'MIGRATE_ON_BOOT');
+    });
+  });
+
   it('accepts the values shipped in .env.example', () => {
     // .env.example is documentation that people copy. If its numbers do not
     // satisfy the cross-field rules above, every new developer's first boot

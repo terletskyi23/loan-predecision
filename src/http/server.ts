@@ -3,6 +3,8 @@ import type { Logger } from 'pino';
 import { ZodError } from 'zod';
 import type { Config } from '../config.js';
 import type { Database } from '../db/pool.js';
+import type { Metrics } from '../metrics.js';
+import { requireScope } from './auth.js';
 import { CORRELATION_HEADER, correlationIdFrom } from './correlation.js';
 import { AppError, toProblem } from './problem.js';
 
@@ -21,6 +23,7 @@ export interface ServerDependencies {
    * genuinely unreachable rather than a mock that pretends to be.
    */
   readonly database: Database;
+  readonly metrics: Metrics;
 }
 
 /**
@@ -28,7 +31,7 @@ export interface ServerDependencies {
  * a concrete pino Logger narrows Fastify's logger generic, and widening it back
  * to the default would discard the typing on request.log.
  */
-export const buildServer = ({ config, logger, database }: ServerDependencies) => {
+export const buildServer = ({ config, logger, database, metrics }: ServerDependencies) => {
   const app = Fastify({
     loggerInstance: logger,
     // Behind Render's proxy, so the client address comes from the forwarded
@@ -43,6 +46,19 @@ export const buildServer = ({ config, logger, database }: ServerDependencies) =>
   app.addHook('onRequest', async (request, reply) => {
     request.correlationId = correlationIdFrom(request.headers[CORRELATION_HEADER]);
     reply.header(CORRELATION_HEADER, request.correlationId);
+  });
+
+  // Labelled by the ROUTE, never the URL: /v1/applications/{id} as a label
+  // value would mint a new time series per application and make the metric
+  // useless within a day.
+  app.addHook('onResponse', async (request, reply) => {
+    const route = request.routeOptions.url ?? 'unmatched';
+    const status = reply.statusCode;
+    metrics.httpRequests.inc({ method: request.method, route, status });
+    metrics.httpDuration.observe({ method: request.method, route }, reply.elapsedTime / 1000);
+    if (status >= 400) {
+      metrics.httpErrors.inc({ class: status >= 500 ? '5xx' : '4xx' });
+    }
   });
 
   app.setNotFoundHandler((request, reply) => {
@@ -73,6 +89,15 @@ export const buildServer = ({ config, logger, database }: ServerDependencies) =>
     // and a probe that checks a dependency turns an outage into a restart loop.
     // docs/06-failure-modes.md, Operational.
     return { status: 'ok' };
+  });
+
+  // Behind the auditor scope rather than open. An earlier draft marked this
+  // "none — bind internally in production", which described a deployment shape
+  // this service does not have: one instance, one public URL, no second bind.
+  // Left open, the outcome mix and pull volumes would be world-readable.
+  app.get('/metrics', { preHandler: requireScope(config, 'audit') }, async (_request, reply) => {
+    void reply.type(metrics.registry.contentType);
+    return metrics.registry.metrics();
   });
 
   app.get('/health/ready', async (request) => {

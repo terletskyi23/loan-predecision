@@ -51,6 +51,23 @@ const tokenList = z.string().transform((value, ctx) => {
   return byToken;
 });
 
+/**
+ * NOT z.coerce.boolean(). That coerces with JavaScript truthiness, so the
+ * string 'false' — the most likely value anyone ever writes — becomes `true`,
+ * and MIGRATE_ON_BOOT=false is silently ignored. An environment variable is
+ * always a string, so the mapping has to be spelled out, and an unrecognised
+ * value must be an error rather than a guess.
+ */
+const bool = z
+  .string()
+  .transform((value, ctx) => {
+    const normalised = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalised)) return true;
+    if (['false', '0', 'no', 'off', ''].includes(normalised)) return false;
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `expected a boolean, got "${value}"` });
+    return z.NEVER;
+  });
+
 const int = (min: number, max?: number) =>
   max === undefined ? z.coerce.number().int().min(min) : z.coerce.number().int().min(min).max(max);
 
@@ -67,7 +84,7 @@ const envSchema = z
     DATABASE_URL: z.string().url(),
     DATABASE_DIRECT_URL: z.string().url().optional(),
     DATABASE_POOL_MAX: int(1, 100).default(10),
-    MIGRATE_ON_BOOT: z.coerce.boolean().default(true),
+    MIGRATE_ON_BOOT: bool.default('true'),
 
     // No default, by design. A defaulted pepper would be a shared secret baked
     // into the image, and every deployment would derive the same subject keys

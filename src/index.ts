@@ -2,6 +2,7 @@ import { loadConfigOrExit } from './config.js';
 import { createLogger } from './logger.js';
 import { createDatabase } from './db/pool.js';
 import { runMigrations } from './db/migrate.js';
+import { createMetrics } from './metrics.js';
 import { buildServer } from './http/server.js';
 
 /**
@@ -31,7 +32,8 @@ if (config.MIGRATE_ON_BOOT) {
 }
 
 const database = createDatabase(config, logger);
-const app = buildServer({ config, logger, database });
+const metrics = createMetrics();
+const app = buildServer({ config, logger, database, metrics });
 
 /**
  * Order matters: stop accepting requests, then release the pool. Closing the

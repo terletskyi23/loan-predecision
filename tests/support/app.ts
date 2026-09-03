@@ -1,6 +1,7 @@
 import { pino } from 'pino';
 import { loadConfig, type Config } from '../../src/config.js';
 import type { Database } from '../../src/db/pool.js';
+import { createMetrics } from '../../src/metrics.js';
 import { buildServer } from '../../src/http/server.js';
 
 export const testConfig = (overrides: NodeJS.ProcessEnv = {}): Config =>
@@ -39,4 +40,14 @@ export const testApp = (options: { config?: Config; database?: Database } = {}) 
     config: options.config ?? testConfig(),
     logger: pino({ level: 'silent' }),
     database: options.database ?? healthyDatabase(),
+    // A fresh registry per app: a shared one would carry counts between tests
+    // and make an assertion about "the counter moved" depend on run order.
+    metrics: createMetrics(),
   });
+
+/** The tokens testConfig() hands out, so tests do not restate them. */
+export const TOKENS = {
+  submission: 'submission-secret',
+  reviewer: 'reviewer-secret',
+  auditor: 'auditor-secret',
+} as const;

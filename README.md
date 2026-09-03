@@ -63,22 +63,31 @@ Requires Node 20+ and Docker.
 ```bash
 git clone <repo> && cd loan-predecision
 cp .env.example .env          # SUBJECT_KEY_PEPPER has no default; set one
-docker compose up -d db
+docker compose up -d db       # Postgres 16
 npm ci
-npm run migrate
+npm run migrate               # forward-only, under an advisory lock
 npm run dev
 ```
 
-```bash
-npm test          # unit + integration + api, against real Postgres
-npm run typecheck
-npm run lint      # guards one architectural invariant, not style — see ADR-0008
-```
+| Command | What it does |
+|---|---|
+| `npm test` | unit + integration + api. Integration needs Postgres and **skips** without it — CI sets `REQUIRE_DATABASE=1` so the skip is a hard error there |
+| `npm run test:unit` | pure functions only; no database needed |
+| `npm run test:integration` | the constraints and transactions, against real Postgres |
+| `npm run test:api` | the contract, via Fastify `inject()` — no port, no socket |
+| `npm run typecheck` | |
+| `npm run lint` | guards one architectural invariant, not style — see ADR-0008 |
+| `npm run migrate` | applies pending migrations; idempotent |
+| `./demo.sh` | walks the interesting paths against a running instance |
 
-The service listens on `http://localhost:3000`. `./demo.sh` walks the
-interesting paths end to end: an approval, a counter-offer, a decline, a
-duplicate submission that produces no second bureau call, a no-hit, a bureau
-outage, and an audit replay.
+The service listens on `http://localhost:3000`. `./demo.sh` exercises what is
+built and prints `PENDING` for what is not, so it never quietly covers half of
+what this documentation promises. Point it anywhere:
+
+```bash
+BASE_URL=https://loan-predecision.onrender.com \
+SUBMISSION_TOKEN=... AUDITOR_TOKEN=... ./demo.sh
+```
 
 ### Trying the deployed instance
 
