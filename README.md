@@ -83,9 +83,8 @@ npm run dev
 | `./demo.sh` | walks the interesting paths against a running instance |
 
 The service listens on `http://localhost:3000`, and serves its own reference at
-`/docs`. `./demo.sh` exercises what is built and prints `PENDING` for what is
-not, so it never quietly covers half of what this documentation promises — and
-each phase deletes one of those lines. Point it anywhere:
+`/docs`. `./demo.sh` walks every documented path — 40 assertions, including the
+ugly ones — and points anywhere:
 
 ```bash
 BASE_URL=https://loan-predecision.onrender.com \
@@ -103,29 +102,41 @@ if it drifts from the code — see ADR-0009.
 ```bash
 BASE_URL=https://loan-predecision.onrender.com
 
-curl -sS "$BASE_URL/health/live"                                  # {"status":"ok"}
-curl -sS "$BASE_URL/health/ready"                                 # {"status":"ready"} — reaches Neon
-curl -sS "$BASE_URL/metrics" -H "Authorization: Bearer $AUDITOR_TOKEN"
+curl -sS "$BASE_URL/health/ready"                                 # warms Render and Neon together
+
+# An approval on the terms applied for. Note reasonCodes: [] — that is correct,
+# and it is the ONLY case where it is: this is not adverse action, so no reason
+# is owed. ADR-0010.
+curl -sS -X POST "$BASE_URL/v1/applications" \
+  -H "Authorization: Bearer $SUBMISSION_TOKEN" \
+  -H "Idempotency-Key: $(uuidgen)" -H 'Content-Type: application/json' \
+  -d '{"productCode":"PERSONAL_UNSECURED_V1","requestedAmountMinor":1800000,"currency":"USD",
+       "termMonths":36,"purpose":"HOME_IMPROVEMENT",
+       "consent":{"attestedByCaller":true,"acceptedAt":"2026-09-03T09:00:00Z"},
+       "applicant":{"firstName":"Daniel","lastName":"Okonkwo","dateOfBirth":"1988-02-19",
+                    "nationalId":"900-55-0601","email":"d@example.com","residenceCountry":"US"},
+       "finances":{"monthlyIncomeMinor":620000,"employmentStatus":"EMPLOYED",
+                   "declaredMonthlyObligationsMinor":90000}}'
+
+# The same call with nationalId 900-55-0142 at 3200000 over 48 months on an
+# income of 540000 produces the counter-offer from docs/03 §5: $26,900 of the
+# $32,000 asked for, at $720.33 a month.
+#
+# 900-55-9001 forces a bureau outage with no configuration and no restart:
+# MANUAL_REVIEW · BUREAU_UNAVAILABLE, and the application is persisted anyway.
 ```
 
-`./demo.sh` runs every one of these and prints what is not built yet:
+Or just run the whole thing:
 
 ```bash
 BASE_URL=https://loan-predecision.onrender.com \
-SUBMISSION_TOKEN=... AUDITOR_TOKEN=... ./demo.sh
+SUBMISSION_TOKEN=... REVIEWER_TOKEN=... AUDITOR_TOKEN=... ./demo.sh
 ```
 
-`DEMO_TOKEN` and `AUDITOR_TOKEN` are in the submission email — throwaway
+The tokens are in the submission email — throwaway
 credentials for the review environment only. The endpoints are authenticated on
 purpose: this service accepts a national identifier and can trigger a bureau
 enquiry, and an open endpoint would let anyone mark a stranger's credit file.
-
-> **Not built yet.** `POST /v1/applications`, the status and review endpoints,
-> and everything under `/v1/audit/` are documented in
-> [`05-api.md`](docs/05-api.md) and are the subject of the next phase. This
-> section only shows commands that work against the deployed instance today;
-> `./demo.sh` lists the rest as `PENDING` rather than letting you discover them
-> with a 404.
 
 > **The first request after a quiet period is slow twice.** Render suspends a
 > free instance after 15 minutes of inactivity and takes about a minute to wake;
@@ -148,7 +159,8 @@ Read in this order. About twenty-five minutes end to end.
 | [`06-failure-modes.md`](docs/06-failure-modes.md) | What breaks, how we notice, what happens — and how this is deployed |
 | [`07-testing.md`](docs/07-testing.md) | Which properties are proven, and which are honestly not |
 | [`08-mock-bureau.md`](docs/08-mock-bureau.md) | The bureau contract, the three outcomes, the profile catalogue |
-| [`adr/`](docs/adr/) | Eight decisions, each with the alternative that was rejected and why |
+| [`09-engine.md`](docs/09-engine.md) | **Start here for a conversation about the rules.** Why each one sits where it sits, what breaks if it moves, and the three questions a reviewer actually asks |
+| [`adr/`](docs/adr/) | Eleven decisions, each with the alternative that was rejected and why |
 
 `policies/2026.09.1.json` is the live policy: thresholds, scorecard bands,
 product limits, and the registry of every reason code the engine can emit. Old

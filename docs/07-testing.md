@@ -319,6 +319,27 @@ Not a coverage percentage. Three checks instead, all mechanical:
 
 ---
 
+## 7b. Where the criterion actually stands
+
+Checks 1 and 3 are implemented and run.
+
+`tests/unit/reason-code-completeness.test.ts` walks the registry and proves all
+22 declared codes are reachable, that the engine emits none the registry does
+not declare, and that each code appears only on the verdict the registry assigns
+it. Check 3 is satisfied by construction and demonstrated by
+`tests/integration/vertical-slice.test.ts`, which replays a stored decision and
+matches — including the `BUREAU_UNAVAILABLE` branch, whose engine input
+(`lookup_failure_cause`) is a column on `pre_decisions` precisely so that this
+branch is replayable at all.
+
+**Check 2 is not implemented and is named here rather than quietly dropped.**
+The grep between `docs/06-failure-modes.md` and its coverage table is a script
+that does not exist. It is the cheapest of the three and the one most likely to
+have drifted by submission, which is exactly why leaving it unstated would be
+worse than leaving it undone.
+
+---
+
 ## 8. Running them
 
 ```bash
@@ -329,6 +350,17 @@ npm run migrate
 npm test                         # unit + integration + api
 npm run test:unit                # pure, no database needed
 ```
+
+At the close of the vertical slice: **235 passing, 1 skipped**, against
+PostgreSQL 16. 188 unit and API tests need no database; 47 integration tests
+need one and skip without it, which is why CI sets `REQUIRE_DATABASE=1` and turns
+that skip into a hard error there.
+
+`./demo.sh` is the other half of the evidence and runs against a deployed
+instance rather than a test harness: 40 assertions covering every documented
+path, including the counter-offer to the minor unit, a forced bureau outage, a
+duplicate that produces no second enquiry, chain verification, replay, and a
+human override that still replays as a match.
 
 CI runs the same three commands against a Postgres service container, plus
 `npm run typecheck` and `npm run lint`. Both failing are build failures.
