@@ -1,0 +1,173 @@
+{
+  "version": "2026.09.1",
+  "effectiveFrom": "2026-09-01",
+  "currency": "USD",
+  "notes": "Synthetic policy. Thresholds are illustrative and modelled on common US consumer-lending practice; they are not a real lender's underwriting standard. This file may still be edited in place because no pre-decision has ever been made under it. Once the service is live, a change means a new version file: see ADR-0005.",
+
+  "products": {
+    "PERSONAL_UNSECURED_V1": {
+      "displayName": "Personal loan, unsecured",
+      "minAmountMinor": 200000,
+      "maxAmountMinor": 5000000,
+      "minTermMonths": 12,
+      "maxTermMonths": 60,
+      "annualRatePct": 12.9,
+      "autoApproveCeilingMinor": 3500000
+    }
+  },
+
+  "consent": {
+    "maxAgeHours": 24,
+    "allowedFutureSkewSeconds": 60
+  },
+
+  "eligibility": {
+    "minAge": 18,
+    "maxAgeAtMaturity": 75,
+    "minMonthlyIncomeMinor": 200000
+  },
+
+  "knockouts": {
+    "activeDelinquency": true,
+    "bankruptcyWithinMonths": 24,
+    "chargeOffWithinMonths": 24
+  },
+
+  "affordability": {
+    "maxDti": 0.43,
+    "counterOfferEnabled": true,
+    "counterOfferRoundingMinor": 10000
+  },
+
+  "thinFile": {
+    "minOldestAccountMonths": 6,
+    "minTotalAccounts": 2,
+    "inputs": ["oldestAccountAgeMonths", "totalAccounts"]
+  },
+
+  "scorecard": {
+    "maxPoints": 100,
+    "bandEvaluation": "FIRST_MATCH_WINS",
+    "requiredInputs": [
+      "worstDelinquencyLast24m",
+      "revolvingUtilizationPct",
+      "oldestAccountAgeMonths",
+      "hardInquiriesLast6m",
+      "distinctAccountTypes"
+    ],
+    "factors": [
+      {
+        "id": "PAYMENT_HISTORY",
+        "maxPoints": 35,
+        "reasonCode": "PAYMENT_HISTORY_ADVERSE",
+        "input": "worstDelinquencyLast24m",
+        "bands": [
+          { "eq": "NONE", "points": 35 },
+          { "eq": "DPD_30", "points": 22 },
+          { "eq": "DPD_60", "points": 11 },
+          { "eq": "DPD_90_PLUS", "points": 3 },
+          { "eq": "CHARGE_OFF", "points": 0 }
+        ],
+        "default": 0
+      },
+      {
+        "id": "UTILIZATION",
+        "maxPoints": 30,
+        "reasonCode": "CREDIT_UTILIZATION_TOO_HIGH",
+        "input": "revolvingUtilizationPct",
+        "bands": [
+          { "lt": 10, "points": 30 },
+          { "lt": 30, "points": 26 },
+          { "lt": 50, "points": 18 },
+          { "lt": 75, "points": 10 },
+          { "lt": 90, "points": 4 },
+          { "gte": 90, "points": 0 }
+        ],
+        "default": 0
+      },
+      {
+        "id": "HISTORY_LENGTH",
+        "maxPoints": 15,
+        "reasonCode": "INSUFFICIENT_CREDIT_HISTORY_LENGTH",
+        "input": "oldestAccountAgeMonths",
+        "bands": [
+          { "gte": 84, "points": 15 },
+          { "gte": 48, "points": 12 },
+          { "gte": 24, "points": 8 },
+          { "gte": 12, "points": 4 },
+          { "lt": 12, "points": 0 }
+        ],
+        "default": 0
+      },
+      {
+        "id": "RECENT_INQUIRIES",
+        "maxPoints": 10,
+        "reasonCode": "TOO_MANY_RECENT_INQUIRIES",
+        "input": "hardInquiriesLast6m",
+        "bands": [
+          { "eq": 0, "points": 10 },
+          { "eq": 1, "points": 8 },
+          { "eq": 2, "points": 6 },
+          { "lte": 4, "points": 3 },
+          { "gte": 5, "points": 0 }
+        ],
+        "default": 0
+      },
+      {
+        "id": "CREDIT_MIX",
+        "maxPoints": 10,
+        "reasonCode": "LIMITED_CREDIT_MIX",
+        "input": "distinctAccountTypes",
+        "bands": [
+          { "gte": 3, "points": 10 },
+          { "eq": 2, "points": 7 },
+          { "eq": 1, "points": 4 },
+          { "eq": 0, "points": 0 }
+        ],
+        "default": 0
+      }
+    ]
+  },
+
+  "bands": {
+    "autoApproveFrom": 70,
+    "referralFrom": 45
+  },
+
+  "reasonCodes": {
+    "maxDisclosed": 4,
+    "materialPointsLost": 5,
+    "registry": [
+      { "code": "AGE_BELOW_MINIMUM",                 "class": "KNOCKOUT_ELIGIBILITY", "stage": "SCREEN",        "verdict": "DECLINED" },
+      { "code": "AGE_ABOVE_MAXIMUM_AT_MATURITY",     "class": "KNOCKOUT_ELIGIBILITY", "stage": "SCREEN",        "verdict": "DECLINED" },
+      { "code": "AMOUNT_OUTSIDE_PRODUCT_LIMITS",     "class": "KNOCKOUT_ELIGIBILITY", "stage": "SCREEN",        "verdict": "DECLINED" },
+      { "code": "TERM_OUTSIDE_PRODUCT_LIMITS",       "class": "KNOCKOUT_ELIGIBILITY", "stage": "SCREEN",        "verdict": "DECLINED" },
+      { "code": "INCOME_BELOW_MINIMUM",              "class": "KNOCKOUT_ELIGIBILITY", "stage": "SCREEN",        "verdict": "DECLINED" },
+
+      { "code": "ACTIVE_DELINQUENCY",                "class": "KNOCKOUT_BUREAU",      "stage": "DECIDE",        "verdict": "DECLINED" },
+      { "code": "BANKRUPTCY_ON_FILE",                "class": "KNOCKOUT_BUREAU",      "stage": "DECIDE",        "verdict": "DECLINED" },
+      { "code": "CHARGE_OFF_ON_FILE",                "class": "KNOCKOUT_BUREAU",      "stage": "DECIDE",        "verdict": "DECLINED" },
+
+      { "code": "PAYMENT_HISTORY_ADVERSE",           "class": "SCORECARD",            "stage": "DECIDE",        "verdict": "ANY" },
+      { "code": "CREDIT_UTILIZATION_TOO_HIGH",       "class": "SCORECARD",            "stage": "DECIDE",        "verdict": "ANY" },
+      { "code": "INSUFFICIENT_CREDIT_HISTORY_LENGTH","class": "SCORECARD",            "stage": "DECIDE",        "verdict": "ANY" },
+      { "code": "TOO_MANY_RECENT_INQUIRIES",         "class": "SCORECARD",            "stage": "DECIDE",        "verdict": "ANY" },
+      { "code": "LIMITED_CREDIT_MIX",                "class": "SCORECARD",            "stage": "DECIDE",        "verdict": "ANY" },
+
+      { "code": "DTI_ABOVE_LIMIT",                   "class": "DECISIVE",             "stage": "AFFORDABILITY", "verdict": "DECLINED" },
+      { "code": "AMOUNT_REDUCED_TO_FIT_DTI",         "class": "DECISIVE",             "stage": "AFFORDABILITY", "verdict": "APPROVED" },
+
+      { "code": "SCORE_IN_REFERRAL_BAND",            "class": "REFERRAL",             "stage": "SCORECARD",     "verdict": "MANUAL_REVIEW" },
+      { "code": "THIN_FILE",                         "class": "REFERRAL",             "stage": "REFERRAL",      "verdict": "MANUAL_REVIEW" },
+      { "code": "NO_CREDIT_FILE",                    "class": "REFERRAL",             "stage": "DECIDE",        "verdict": "MANUAL_REVIEW" },
+      { "code": "AMOUNT_ABOVE_AUTO_LIMIT",           "class": "REFERRAL",             "stage": "REFERRAL",      "verdict": "MANUAL_REVIEW" },
+      { "code": "IDENTITY_MISMATCH",                 "class": "REFERRAL",             "stage": "REFERRAL",      "verdict": "MANUAL_REVIEW" },
+      { "code": "BUREAU_UNAVAILABLE",                "class": "REFERRAL",             "stage": "DECIDE",        "verdict": "MANUAL_REVIEW" },
+      { "code": "BUREAU_DATA_INCOMPLETE",            "class": "REFERRAL",             "stage": "DECIDE",        "verdict": "MANUAL_REVIEW" }
+    ]
+  },
+
+  "offer": {
+    "validityDays": 30
+  }
+}
