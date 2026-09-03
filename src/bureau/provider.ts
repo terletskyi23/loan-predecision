@@ -32,8 +32,20 @@ export class BureauTransportError extends Error {
 
 export interface BureauProvider {
   readonly name: string;
-  /** Throws `BureauTransportError` on a transport failure; the resilience wrapper decides what that means. */
-  pull(nationalId: string): Promise<BureauProviderResult>;
+  /**
+   * `requestId` identifies ONE LOGICAL PULL and is reused across every attempt
+   * of it. A real bureau treats a repeated request id as the same enquiry;
+   * generating a fresh one per retry turns each retry into a new enquiry from
+   * the provider's point of view — which is the whole harm this service exists
+   * to prevent, inflicted by our own retry budget (docs/02 §6).
+   *
+   * It is not the subject key and not derived from it: it identifies the CALL,
+   * not the person.
+   *
+   * Throws `BureauTransportError` on a transport failure; the resilience wrapper
+   * decides what that means.
+   */
+  pull(nationalId: string, requestId: string): Promise<BureauProviderResult>;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,15 +72,27 @@ export interface MockBureauOptions {
  * attempts and then succeeds, which is what proves the retry actually retries
  * rather than merely existing.
  */
-export const createMockBureau = (options: MockBureauOptions): BureauProvider => {
+export interface MockBureau extends BureauProvider {
+  /** Test-only introspection. Not on `BureauProvider`, so no production code can read it. */
+  readonly seenRequestIds: readonly string[];
+}
+
+export const createMockBureau = (options: MockBureauOptions): MockBureau => {
   // Per-process, per-subject. A counter shared across subjects would make one
   // applicant's retry consume another's budget and the flaky mode untestable.
   const attemptsBySubject = new Map<string, number>();
 
+  // Every request id this provider was called with, in order. A real bureau
+  // would deduplicate on it; the mock records it so a test can prove the retry
+  // reuses one id rather than minting a fresh enquiry per attempt.
+  const seenRequestIds: string[] = [];
+
   return {
     name: options.provider,
+    seenRequestIds,
 
-    async pull(nationalId: string): Promise<BureauProviderResult> {
+    async pull(nationalId: string, requestId: string): Promise<BureauProviderResult> {
+      seenRequestIds.push(requestId);
       const entry = lookupCatalogue(nationalId);
 
       if (entry.kind === 'FAILURE') {

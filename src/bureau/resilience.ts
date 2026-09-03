@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { BureauLookup, BureauProviderFailure } from '../domain/bureau-lookup.js';
 import { BureauTransportError, type BureauProvider } from './provider.js';
 
@@ -23,6 +24,8 @@ export interface ResilienceOptions {
   readonly backoffBaseMs: number;
   /** Injected so a test can make backoff deterministic; production passes Math.random. */
   readonly random?: () => number;
+  /** Supplied when the caller already has an id to correlate by; generated once per pull otherwise. */
+  readonly requestId?: string;
   readonly onAttempt?: (attempt: number, failure: BureauProviderFailure | null) => void;
 }
 
@@ -63,17 +66,31 @@ export const pullWithResilience = async (
   options: ResilienceOptions,
 ): Promise<BureauLookup> => {
   const random = options.random ?? Math.random;
+
+  // ONE id for the whole logical pull, minted here and reused by every attempt
+  // below. Minting it inside the loop would be the bug: each retry would look
+  // like a separate enquiry to the provider, and the retry budget would become a
+  // multiplier on the applicant's credit file.
+  const requestId = options.requestId ?? randomUUID();
   let attempted = 0;
   let lastFailure: BureauProviderFailure = 'SERVER_ERROR';
 
   while (attempted < options.maxAttempts) {
     attempted += 1;
     try {
-      const result = await withTimeout(provider.pull(nationalId), options.timeoutMs);
+      const result = await withTimeout(provider.pull(nationalId, requestId), options.timeoutMs);
       options.onAttempt?.(attempted, null);
       return result;
     } catch (error) {
-      lastFailure = error instanceof BureauTransportError ? error.failure : 'SERVER_ERROR';
+      // OUR bug is not the bureau's outage. A TypeError in an adapter relabelled
+      // as SERVER_ERROR gets retried — a second outbound call on a real provider
+      // — and is then recorded as RETRIES_EXHAUSTED on the pre-decision: a false
+      // statement about a third party, inside a record built to be replayed and
+      // defended. docs/02 §6 applies this instinct to the bureau's 4xx; it
+      // applies at least as strongly to ours.
+      if (!(error instanceof BureauTransportError)) throw error;
+
+      lastFailure = error.failure;
       options.onAttempt?.(attempted, lastFailure);
 
       if (attempted >= options.maxAttempts) break;

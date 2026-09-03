@@ -93,6 +93,37 @@ describe('D1 — three outcomes that are not interchangeable', () => {
     expect(run(application(), gap).reasonCodes).toEqual(['BUREAU_DATA_INCOMPLETE']);
   });
 
+  it.each([
+    ['hasActiveDelinquency'],
+    ['monthsSinceBankruptcy'],
+    ['monthsSinceChargeOff'],
+    ['subjectMatch'],
+  ] as const)('refers rather than approving when %s is missing', (attribute) => {
+    // The gate used to cover only the scorecard and thin-file inputs, so it
+    // protected the applicant from being scored on our data gap and did nothing
+    // in the other direction: a report without `hasActiveDelinquency` skipped
+    // D2 entirely and was APPROVED, and one without `subjectMatch` threw a
+    // TypeError on the way to D4. The mock always populates these, so only a
+    // real provider omitting a section would ever have found it.
+    const gap = found('PRIME', { [attribute]: undefined });
+    expect(run(application(), gap)).toMatchObject({
+      verdict: 'MANUAL_REVIEW',
+      stage: 'D1',
+      reasonCodes: ['BUREAU_DATA_INCOMPLETE'],
+    });
+  });
+
+  it('does not confuse "no bankruptcy on file" with "we were not told"', () => {
+    // null is a fact the bureau reported; undefined is our gap. Two absences,
+    // two types, two verdicts.
+    expect(run(application(), found('PRIME', { monthsSinceBankruptcy: null })).verdict).not.toBe('MANUAL_REVIEW');
+  });
+
+  it('refers on a subjectMatch that is present but half-filled', () => {
+    const gap = found('PRIME', { subjectMatch: { nameMatches: true } as never });
+    expect(run(application(), gap).reasonCodes).toEqual(['BUREAU_DATA_INCOMPLETE']);
+  });
+
   it('does not treat missing obligations as incomplete, because D7 falls back', () => {
     const noObligations = found('PRIME', { monthlyObligationsMinor: undefined });
     expect(run(application({ requestedAmountMinor: 1_800_000, termMonths: 36 }), noObligations).verdict).toBe('APPROVED');
@@ -288,10 +319,13 @@ describe('reason codes', () => {
     expect(run().reasonCodes).not.toContain('TOO_MANY_RECENT_INQUIRIES');
   });
 
-  it('never discloses more than the policy cap, and the database agrees', () => {
+  it('never discloses more than the policy cap', () => {
+    // The claim "and the database agrees" used to be here, asserted twice
+    // against the same in-memory array and never against a database. The
+    // constraint is proven where it lives, in tests/integration/schema.test.ts;
+    // this proves only what a unit test can.
     const result = run(application(), found('ADVERSE_HISTORY'));
     expect(result.reasonCodes.length).toBeLessThanOrEqual(policy.reasonCodes.maxDisclosed);
-    expect(result.reasonCodes.length).toBeLessThanOrEqual(4);
   });
 
   it('gives every verdict except a full approval at least one reason', () => {

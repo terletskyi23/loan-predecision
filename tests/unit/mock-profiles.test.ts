@@ -96,8 +96,8 @@ describe('the attribute pairs that look redundant and are not', () => {
 
   it('only NAME_MISMATCH disagrees on identity', () => {
     for (const [name, profile] of Object.entries(PROFILES)) {
-      expect(profile.subjectMatch.dateOfBirthMatches, name).toBe(true);
-      expect(profile.subjectMatch.nameMatches, name).toBe(name !== 'NAME_MISMATCH');
+      expect(profile.subjectMatch?.dateOfBirthMatches, name).toBe(true);
+      expect(profile.subjectMatch?.nameMatches, name).toBe(name !== 'NAME_MISMATCH');
     }
   });
 

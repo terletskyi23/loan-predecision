@@ -112,7 +112,7 @@ export const createBureauGateway = (options: GatewayOptions): BureauGateway => {
    * while the winner recorded SERVER_ERROR for the same fact in the same second.
    * Reading the claim removes the case and shortens the loser's latency.
    */
-  const waitForWinner = async (key: string, deadline: number): Promise<GatewayResult> => {
+  const waitForWinner = async (key: string, subjectKey: string, deadline: number): Promise<GatewayResult> => {
     metrics.bureauClaimContention.inc();
 
     for (;;) {
@@ -156,6 +156,24 @@ export const createBureauGateway = (options: GatewayOptions): BureauGateway => {
       }
     }
 
+    // And check the REPORT table, not only the claim. The claim is coordination
+    // and it moves: a third request can re-claim the key — state back to
+    // IN_FLIGHT, report_id NULL — while the winner's report sits committed and
+    // reusable. Reading only the claim in that window refers an applicant as
+    // BUREAU_UNAVAILABLE with their report already in the database, which is
+    // exactly the failure the paragraph above exists to prevent, arriving by a
+    // different door.
+    const committed = await findReusableReport(database, subjectKey, provider.name, new Date());
+    if (committed !== null) {
+      metrics.bureauLookups.inc({ result: 'waited' });
+      return {
+        lookup: lookupFromStored(committed.outcome, committed.report, committed.provider, committed.pulledAt),
+        reportId: committed.id,
+        reused: true,
+        failureCause: null,
+      };
+    }
+
     // A genuine WAIT_EXPIRED: the winner is still running and slower than our
     // patience. The bureau was not unavailable — WE stopped waiting. The verdict
     // is still MANUAL_REVIEW and the applicant's notice still says
@@ -193,22 +211,33 @@ export const createBureauGateway = (options: GatewayOptions): BureauGateway => {
 
       if (!claim.won) {
         // ---------------------------------------------- 4.3 bounded wait
-        return waitForWinner(key, Date.now() + options.waitMs);
+        return waitForWinner(key, request.subjectKey, Date.now() + options.waitMs);
       }
 
       await request.onPullRequested();
 
-      const lookup = await pullWithResilience(provider, request.nationalId, {
-        timeoutMs: options.timeoutMs,
-        maxAttempts: options.maxAttempts,
-        backoffBaseMs: options.backoffBaseMs,
-      });
+      let lookup;
+      try {
+        lookup = await pullWithResilience(provider, request.nationalId, {
+          timeoutMs: options.timeoutMs,
+          maxAttempts: options.maxAttempts,
+          backoffBaseMs: options.backoffBaseMs,
+        });
+      } catch (error) {
+        // Our own bug, not a bureau failure — `pullWithResilience` rethrows
+        // anything that is not a transport error. Release the claim so the next
+        // applicant is not blocked for the whole lease by a defect in our code,
+        // and let the error surface as a 500 rather than being laundered into
+        // "the bureau was down".
+        await failClaim(database, key, 'SERVER_ERROR', leaseExpiresAt);
+        throw error;
+      }
 
       if (lookup.outcome === 'UNAVAILABLE') {
         // Only UNAVAILABLE writes nothing, because we learned nothing. FAILED is
         // immediately reclaimable so the next applicant does not sit out the
         // whole lease behind a call that already failed.
-        await failClaim(database, key, lookup.cause === 'WAIT_EXPIRED' ? 'RETRIES_EXHAUSTED' : lookup.cause);
+        await failClaim(database, key, lookup.cause === 'WAIT_EXPIRED' ? 'RETRIES_EXHAUSTED' : lookup.cause, leaseExpiresAt);
         metrics.bureauPulls.inc({ outcome: 'unavailable' });
         metrics.bureauLookups.inc({ result: 'unavailable' });
         return { lookup, reportId: null, reused: false, failureCause: lookup.cause };
@@ -218,29 +247,46 @@ export const createBureauGateway = (options: GatewayOptions): BureauGateway => {
       const pulledAt = lookup.outcome === 'FOUND' ? lookup.report.pulledAt : lookup.pulledAt;
       const expiresAt = new Date(pulledAt.getTime() + options.reportTtlMinutes * 60_000);
 
-      // The report and the claim close together. A committed report with an
-      // IN_FLIGHT claim would make every waiter sit out the full lease behind a
-      // pull that already succeeded.
-      await database.transaction(async (tx) => {
-        await insertBureauReport(tx, {
-          id: reportId,
-          subjectKey: request.subjectKey,
-          provider: provider.name,
-          outcome: lookup.outcome,
-          // WHOSE attestation caused this enquiry. Reuse crosses client
-          // boundaries by design, so the client deciding on a report is
-          // frequently not the client whose attestation caused it — and without
-          // these two columns the audit answers "who said this person
-          // authorised an enquiry" with the wrong client's name on every reused
-          // report, which is the common case.
-          attestedByClientId: request.clientId,
-          causedByApplicationId: request.applicationId,
-          pulledAt,
-          expiresAt,
-          payload: lookup.outcome === 'FOUND' ? toPayload(lookup.report) : {},
+      // THE ENQUIRY HAS ALREADY HAPPENED. From here on, every failure path has
+      // to assume the applicant's credit file is already marked — so the one
+      // thing that must not happen is silently leaving the claim IN_FLIGHT and
+      // letting the next request pull again for a report we already paid for.
+      //
+      // The report and the claim close together for the same reason in the other
+      // direction: a committed report with an IN_FLIGHT claim makes every waiter
+      // sit out the full lease behind a pull that already succeeded.
+      try {
+        await database.transaction(async (tx) => {
+          await insertBureauReport(tx, {
+            id: reportId,
+            subjectKey: request.subjectKey,
+            provider: provider.name,
+            outcome: lookup.outcome,
+            // WHOSE attestation caused this enquiry. Reuse crosses client
+            // boundaries by design, so the client deciding on a report is
+            // frequently not the client whose attestation caused it — and
+            // without these two columns the audit answers "who said this person
+            // authorised an enquiry" with the wrong client's name on every
+            // reused report, which is the common case.
+            attestedByClientId: request.clientId,
+            causedByApplicationId: request.applicationId,
+            pulledAt,
+            expiresAt,
+            payload: lookup.outcome === 'FOUND' ? toPayload(lookup.report) : {},
+          });
+          await completeClaim(tx, key, reportId, leaseExpiresAt);
         });
-        await completeClaim(tx, key, reportId);
-      });
+      } catch (error) {
+        // The evidence could not be stored. Release the claim rather than
+        // leaving it to expire, so a retry is a retry and not a five-second
+        // stall — but the honest cost is recorded: this path will pull again,
+        // and the applicant's file will carry two enquiries for one decision.
+        // A single ordinary database fault is enough to reach it, which is why
+        // it is counted rather than merely caught.
+        metrics.bureauPulls.inc({ outcome: 'lost' });
+        await failClaim(database, key, 'SERVER_ERROR', leaseExpiresAt).catch(() => undefined);
+        throw error;
+      }
 
       metrics.bureauPulls.inc({ outcome: lookup.outcome.toLowerCase() });
       metrics.bureauLookups.inc({ result: 'pulled' });

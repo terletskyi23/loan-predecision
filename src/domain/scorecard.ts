@@ -1,4 +1,4 @@
-import type { BureauReport } from './bureau-lookup.js';
+import type { BureauReport, CompleteBureauReport } from './bureau-lookup.js';
 import type { Policy, ScorecardBand, ScorecardFactor } from './policy.js';
 
 /**
@@ -78,17 +78,75 @@ const readInput = (report: BureauReport, input: string): string | number | undef
  * is deliberately NOT in this set: D7 falls back to the declared figure when the
  * bureau does not supply one, so its absence is handled rather than fatal.
  *
- * The set comes from the policy file rather than from a constant here, so a
- * future policy that scores a new attribute makes that attribute required
- * without anybody remembering to edit this file.
+ * These come from the policy file rather than from a constant here, so a future
+ * policy that scores a new attribute makes that attribute required without
+ * anybody remembering to edit this file.
  */
 export const requiredInputs = (policy: Policy): readonly string[] => [
   ...new Set([...policy.scorecard.requiredInputs, ...policy.thinFile.inputs]),
 ];
 
-/** The attributes the policy requires and this report does not carry. */
-export const missingInputs = (report: BureauReport, policy: Policy): readonly string[] =>
-  requiredInputs(policy).filter((input) => readInput(report, input) === undefined);
+/**
+ * The attributes D2 and D4 read, which the policy does not declare because they
+ * are structural rather than configurable — a lender does not switch off having
+ * an opinion about live delinquencies.
+ *
+ * THEY MUST BE CHECKED, and leaving them out was a real defect rather than a
+ * theoretical one. The gate was written to protect the applicant from being
+ * scored on our data gap, and it did — but only in that direction. A report
+ * arriving without `hasActiveDelinquency` skipped the knockout entirely and the
+ * applicant was APPROVED, and one without `subjectMatch` crashed with a
+ * TypeError on the way to D4. The mock always populates them, so no test could
+ * ever have caught it; a real provider that omits a section is the boundary
+ * `docs/08` §7 says this interface exists to defend, and it was undefended in
+ * the one direction where a gap helps the applicant and hurts the lender.
+ *
+ * `null` on the two month counters means "none on file" — a fact the bureau
+ * reported — so only `undefined` counts as missing here. That distinction is the
+ * whole reason the two absences have different types.
+ */
+const STRUCTURAL_INPUTS = [
+  'hasActiveDelinquency',
+  'monthsSinceBankruptcy',
+  'monthsSinceChargeOff',
+  'subjectMatch',
+] as const;
+
+const structuralValue = (report: BureauReport, input: (typeof STRUCTURAL_INPUTS)[number]): unknown => {
+  switch (input) {
+    case 'hasActiveDelinquency':
+      return report.hasActiveDelinquency;
+    case 'monthsSinceBankruptcy':
+      return report.monthsSinceBankruptcy;
+    case 'monthsSinceChargeOff':
+      return report.monthsSinceChargeOff;
+    case 'subjectMatch':
+      return report.subjectMatch;
+  }
+};
+
+/**
+ * Narrows to a report the later stages can read.
+ *
+ * A type guard rather than a boolean, so the completeness check and the type
+ * that depends on it cannot come apart: D2 and D4 accept only
+ * `CompleteBureauReport`, and this is the only thing that produces one.
+ */
+export const isComplete = (report: BureauReport, policy: Policy): report is CompleteBureauReport =>
+  missingInputs(report, policy).length === 0;
+
+/** Everything the engine reads that this report does not carry. */
+export const missingInputs = (report: BureauReport, policy: Policy): readonly string[] => [
+  ...requiredInputs(policy).filter((input) => readInput(report, input) === undefined),
+  ...STRUCTURAL_INPUTS.filter((input) => structuralValue(report, input) === undefined),
+  // A subjectMatch object that is present but incomplete is the same gap one
+  // level down, and reading `.nameMatches` off it at D4 would be `undefined`
+  // silently treated as "matches".
+  ...(report.subjectMatch !== undefined &&
+  (typeof report.subjectMatch.nameMatches !== 'boolean' || typeof report.subjectMatch.dateOfBirthMatches !== 'boolean')
+    ? ['subjectMatch']
+    : []),
+];
 
 const award = (factor: ScorecardFactor, value: string | number): FactorAward => {
   const band = factor.bands.find((candidate) => matches(candidate, value));

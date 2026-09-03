@@ -1,8 +1,8 @@
-import type { BureauLookup, BureauReport } from './bureau-lookup.js';
+import type { BureauLookup, CompleteBureauReport } from './bureau-lookup.js';
 import { Decimal, annuityPaymentMinor, debtToIncome, maxPrincipalForPaymentMinor } from './money.js';
 import type { Policy, PolicyProduct } from './policy.js';
 import { discloseReasonCodes } from './reason-codes.js';
-import { missingInputs, score, type Scorecard } from './scorecard.js';
+import { isComplete, score, type Scorecard } from './scorecard.js';
 
 /**
  * The engine. Two pure functions, no clock, no database, no network.
@@ -167,7 +167,7 @@ const terminal = (
 });
 
 /** D2. Every knockout that applies is disclosed, for the same reason S1 discloses all of its own. */
-const bureauKnockouts = (report: BureauReport, policy: Policy): readonly string[] => {
+const bureauKnockouts = (report: CompleteBureauReport, policy: Policy): readonly string[] => {
   const codes: string[] = [];
 
   if (policy.knockouts.activeDelinquency && report.hasActiveDelinquency) codes.push('ACTIVE_DELINQUENCY');
@@ -188,7 +188,7 @@ const bureauKnockouts = (report: BureauReport, policy: Policy): readonly string[
 /** D4. Referral triggers, all of them, before any score band is consulted. */
 const referralTriggers = (
   application: EngineApplication,
-  report: BureauReport,
+  report: CompleteBureauReport,
   policy: Policy,
   definition: PolicyProduct,
 ): readonly string[] => {
@@ -235,8 +235,11 @@ export const decide = (
   if (lookup.outcome === 'NO_HIT') return terminal('MANUAL_REVIEW', 'D1', ['NO_CREDIT_FILE'], policy, null);
 
   const report = lookup.report;
-  if (missingInputs(report, policy).length > 0) {
-    // Scoring the gap as zero would decline a person for OUR data defect.
+  if (!isComplete(report, policy)) {
+    // Scoring the gap as zero would decline a person for OUR data defect — and
+    // NOT scoring a missing knockout attribute would approve them on ours. The
+    // gate covers both directions; `isComplete` is what narrows the type so the
+    // stages below cannot be reached without it.
     return terminal('MANUAL_REVIEW', 'D1', ['BUREAU_DATA_INCOMPLETE'], policy, null);
   }
 

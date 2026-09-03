@@ -14,6 +14,7 @@ import { SUBMIT_SCOPE, claimKey, completeKey, fingerprint } from '../db/idempote
 import { findPreDecision, insertPreDecision } from '../db/pre-decisions.js';
 import type { Database, Queryable } from '../db/pool.js';
 import { findReview, openReview } from '../db/reviews.js';
+import type { LookupFailureCause } from '../domain/bureau-lookup.js';
 import { decide, screen, UnknownProductError, type EngineApplication } from '../domain/engine.js';
 import type { Policy } from '../domain/policy.js';
 import type { Metrics } from '../metrics.js';
@@ -77,6 +78,13 @@ export const createApplicationService = (options: ApplicationServiceOptions) => 
    * integrator sent a bad timestamp" into the applicant's adverse action trail.
    */
   const assertConsentIsUsable = (body: SubmitApplicationBody, policy: Policy, now: Date): void => {
+    if (!body.consent.attestedByCaller) {
+      // ADR-0007: the attestation is mandatory at the edge, and the CHECK on
+      // `applications.consent_attested` makes it impossible to bypass the edge
+      // and insert one anyway. This is the edge.
+      throw new AppError('CONSENT_REQUIRED', 'consent.attestedByCaller must be true. No enquiry is made without it.');
+    }
+
     const acceptedAt = new Date(body.consent.acceptedAt);
     const skewMs = policy.consent.allowedFutureSkewSeconds * 1_000;
 
@@ -220,7 +228,10 @@ export const createApplicationService = (options: ApplicationServiceOptions) => 
       let verdict;
       let reportId: string | null = null;
       let reused = false;
-      let failureCause: string | null = null;
+      // Typed, not `string`. It is an engine input on the replay path and a
+      // constrained column since migration 004, and the cast that used to sit at
+      // the insert was the tell that it had been widened on the way through.
+      let failureCause: LookupFailureCause | null = null;
       let bureauOutcome: string | null = null;
 
       try {
@@ -280,7 +291,8 @@ export const createApplicationService = (options: ApplicationServiceOptions) => 
       const decidedAt = clock();
       const status = verdict.verdict === 'MANUAL_REVIEW' ? 'IN_REVIEW' : 'PRE_DECIDED';
 
-      const envelope = await database.transaction(async (tx) => {
+      const closeSubmission = async (): Promise<Envelope> =>
+        database.transaction(async (tx) => {
         await insertPreDecision(tx, {
           applicationId: application.id,
           verdict: verdict.verdict,
@@ -295,7 +307,7 @@ export const createApplicationService = (options: ApplicationServiceOptions) => 
           engineVersion: config.ENGINE_VERSION,
           bureauReportId: reportId,
           bureauReportReused: reused,
-          lookupFailureCause: failureCause as never,
+          lookupFailureCause: failureCause,
           decidedAt,
         });
 
@@ -336,6 +348,32 @@ export const createApplicationService = (options: ApplicationServiceOptions) => 
         return built;
       });
 
+      let envelope: Envelope;
+      try {
+        envelope = await closeSubmission();
+      } catch (error) {
+        // TWO REQUESTS DECIDED THE SAME APPLICATION AND THIS ONE COMMITTED
+        // SECOND. It happens when an idempotency lease is taken over while the
+        // original holder is still alive: both reach the closing transaction,
+        // and `pre_decisions`'s primary key lets exactly one of them through.
+        //
+        // That constraint doing its job is the design working — one application,
+        // one verdict, and layer 3 meant only one bureau enquiry either way. But
+        // unwinding into an opaque 500 is not: whichever request committed second
+        // gets it, which can be the one that did the real work. docs/02 §3
+        // promises the caller a resumed application, so give them the decision
+        // that exists rather than an internal error about the one that does not.
+        if (!isDuplicatePreDecision(error)) throw error;
+
+        const committed = await findPreDecision(database, application.id);
+        if (committed === null) throw error;
+
+        const settled = await findApplication(database, application.id, command.clientId);
+        if (settled === null) throw error;
+
+        return { kind: 'DECIDED', envelope: await buildEnvelope(database, policies, settled, command.correlationId) };
+      }
+
       metrics.preDecisions.inc({ verdict: verdict.verdict });
       return { kind: 'DECIDED', envelope };
     },
@@ -355,12 +393,18 @@ export const createApplicationService = (options: ApplicationServiceOptions) => 
   };
 };
 
+/** 23505 on `pre_decisions_pkey` — a second verdict for one application. */
+const isDuplicatePreDecision = (error: unknown): boolean => {
+  const pg = error as { code?: string; constraint?: string } | null;
+  return pg?.code === '23505' && pg.constraint === 'pre_decisions_pkey';
+};
+
 interface ClosingTrail {
   applicationId: string;
   knockout: boolean;
   reasonCodes: readonly string[];
   bureauOutcome: string | null;
-  failureCause: string | null;
+  failureCause: LookupFailureCause | null;
   reportId: string | null;
   reused: boolean;
   verdict: string;

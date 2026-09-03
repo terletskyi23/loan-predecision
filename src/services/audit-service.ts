@@ -48,13 +48,33 @@ export interface ReplayResult {
   readonly replayedAt: string;
 }
 
+/**
+ * EVERY DERIVED FIELD, not a selection.
+ *
+ * An earlier version compared the verdict, the codes, the approved amount and
+ * the score — and nothing else. `monthlyPaymentMinor`, `dti` and
+ * `offerExpiresAt` were outside the verifier, so the instalment could be edited
+ * in the database to a cent and replay still answered `match: true` while the
+ * status endpoint happily served the altered figure. The instalment and the
+ * expiry are the two numbers an applicant is actually held to, which made them
+ * the worst possible fields to leave out of the tool whose only job is to notice
+ * that stored evidence changed.
+ *
+ * `requestedAmountMinor` is here too: it is duplicated onto `pre_decisions` to
+ * carry the counter-offer constraint (migration 002), and an unverified
+ * duplicate is a way to neuter that constraint silently.
+ */
 interface ReplaySnapshot {
   readonly verdict: string;
   // A mutable array at the serialisation boundary, not out of carelessness: the
   // response schema describes JSON, and JSON has no readonly.
   readonly reasonCodes: string[];
+  readonly requestedAmountMinor: number | null;
   readonly approvedAmountMinor: number | null;
+  readonly monthlyPaymentMinor: number | null;
+  readonly offerExpiresAt: string | null;
   readonly score: number | null;
+  readonly dti: number | null;
   readonly policyVersion: string;
   readonly engineVersion: string;
 }
@@ -146,8 +166,12 @@ export const createAuditService = (options: { database: Database; policies: Poli
       const recomputed: ReplaySnapshot = {
         verdict: result.verdict,
         reasonCodes: [...result.reasonCodes],
+        requestedAmountMinor: application.requestedAmountMinor,
         approvedAmountMinor: 'approvedAmountMinor' in result ? result.approvedAmountMinor : null,
+        monthlyPaymentMinor: 'monthlyPaymentMinor' in result ? result.monthlyPaymentMinor : null,
+        offerExpiresAt: 'offerExpiresAt' in result ? (result.offerExpiresAt?.toISOString() ?? null) : null,
         score: 'score' in result ? result.score : null,
+        dti: 'dti' in result ? result.dti : null,
         policyVersion: policy.version,
         engineVersion: config.ENGINE_VERSION,
       };
@@ -155,20 +179,43 @@ export const createAuditService = (options: { database: Database; policies: Poli
       const recordedSnapshot: ReplaySnapshot = {
         verdict: recorded.verdict,
         reasonCodes: [...recorded.reasonCodes],
+        requestedAmountMinor: recorded.requestedAmountMinor,
         approvedAmountMinor: recorded.approvedAmountMinor,
+        monthlyPaymentMinor: recorded.monthlyPaymentMinor,
+        offerExpiresAt: recorded.offerExpiresAt?.toISOString() ?? null,
         score: recorded.score,
+        dti: recorded.dti,
         policyVersion: recorded.policyVersion,
         engineVersion: recorded.engineVersion,
       };
 
       const differences: string[] = [];
-      if (recordedSnapshot.verdict !== recomputed.verdict) differences.push('verdict');
-      if (recordedSnapshot.reasonCodes.join(',') !== recomputed.reasonCodes.join(',')) differences.push('reasonCodes');
-      if (recordedSnapshot.approvedAmountMinor !== recomputed.approvedAmountMinor) differences.push('approvedAmountMinor');
-      if (recordedSnapshot.score !== recomputed.score) differences.push('score');
+      const compare = (field: keyof ReplaySnapshot): void => {
+        const left = recordedSnapshot[field];
+        const right = recomputed[field];
+        const same = Array.isArray(left) && Array.isArray(right) ? left.join(',') === right.join(',') : left === right;
+        if (!same) differences.push(field);
+      };
+
+      // Walked as a list rather than written out as a chain of ifs, so a field
+      // added to the snapshot and forgotten here is a compile error rather than
+      // a silent hole in the verifier — which is exactly how the last hole got in.
+      const COMPARED: readonly (keyof ReplaySnapshot)[] = [
+        'verdict',
+        'reasonCodes',
+        'requestedAmountMinor',
+        'approvedAmountMinor',
+        'monthlyPaymentMinor',
+        'offerExpiresAt',
+        'score',
+        'dti',
+        'policyVersion',
+      ];
+      COMPARED.forEach(compare);
       // An engine version change is a legitimate difference and is reported
       // rather than hidden: that is the whole reason the column exists. It does
-      // not, on its own, make the replay a mismatch of the DECISION.
+      // not, on its own, make the replay a mismatch of the DECISION. It is
+      // outside COMPARED for that reason, not by oversight.
       if (recordedSnapshot.engineVersion !== recomputed.engineVersion) differences.push('engineVersion');
 
       const decisionDiffers = differences.some((field) => field !== 'engineVersion');

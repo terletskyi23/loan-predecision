@@ -6,6 +6,7 @@ import { createMetrics } from './metrics.js';
 import { buildServer } from './http/server.js';
 import { createFilePolicyStore } from './policy/loader.js';
 import { createServices } from './services/index.js';
+import { createSweeper } from './services/sweeper.js';
 
 /**
  * Composition root. The only place that knows how the pieces fit together, and
@@ -71,8 +72,26 @@ const app = await buildServer({
   services: createServices({ config, database, policies, metrics, logger }),
 });
 
+/**
+ * Started after the server is built and before it listens. Nothing waits on an
+ * orphan, so without this the only evidence it exists is a row nobody reads —
+ * which is why `applications_abandoned_total` is incremented here rather than
+ * anywhere in the request path.
+ */
+const sweeper = createSweeper({
+  database,
+  metrics,
+  logger,
+  afterMinutes: config.ORPHAN_SWEEP_AFTER_MINUTES,
+  intervalMinutes: config.ORPHAN_SWEEP_INTERVAL_MINUTES,
+  idempotencyRetentionHours: config.IDEMPOTENCY_RETENTION_HOURS,
+  claimLeaseMs: config.BUREAU_CLAIM_LEASE_MS,
+});
+sweeper.start();
+
 const shutdown = (signal: string): void => {
   logger.info({ signal }, 'shutting down');
+  sweeper.stop();
   void app
     .close()
     .then(() => database.close())

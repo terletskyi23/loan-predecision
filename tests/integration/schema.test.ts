@@ -392,6 +392,7 @@ describe.skipIf(!withDatabase)('the constraints that carry correctness', () => {
         '001_init.sql',
         '002_reason_codes_depend_on_verdict.sql',
         '003_claim_carries_the_failure_cause.sql',
+        '004_the_lookup_failure_cause_is_a_closed_set.sql',
       ]);
       for (const row of rows) expect(row.checksum).toMatch(/^[0-9a-f]{64}$/);
     });

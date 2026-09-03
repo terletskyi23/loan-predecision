@@ -197,10 +197,23 @@ export const readClaim = async (db: Queryable, pullKey: string): Promise<ClaimRo
 };
 
 /** DONE always carries a report id: a waiter reads this row to learn the result, and DONE without one makes that read lie. */
-export const completeClaim = async (tx: Queryable, pullKey: string, reportId: string): Promise<void> => {
+export const completeClaim = async (
+  tx: Queryable,
+  pullKey: string,
+  reportId: string,
+  heldSince: Date,
+): Promise<void> => {
+  // Guarded on the lease this caller was granted. Without it a stale holder can
+  // flip a LIVE claim belonging to somebody else — and because FAILED is
+  // deliberately reclaimable at once, a third request then pulls immediately
+  // rather than waiting out any lease. That amplifies the documented lease
+  // weakness instead of merely inheriting it, which is why the guard is here
+  // even though the fencing token that would close the hole properly is not.
   await tx.query(
-    `UPDATE bureau_pull_claims SET state = 'DONE', report_id = $2, failure_cause = NULL WHERE pull_key = $1`,
-    [pullKey, reportId],
+    `UPDATE bureau_pull_claims
+        SET state = 'DONE', report_id = $2, failure_cause = NULL
+      WHERE pull_key = $1 AND state = 'IN_FLIGHT' AND lease_expires_at = $3`,
+    [pullKey, reportId, heldSince],
   );
 };
 
@@ -213,9 +226,12 @@ export const failClaim = async (
   db: Queryable,
   pullKey: string,
   cause: BureauProviderFailure,
+  heldSince: Date,
 ): Promise<void> => {
   await db.query(
-    `UPDATE bureau_pull_claims SET state = 'FAILED', report_id = NULL, failure_cause = $2 WHERE pull_key = $1`,
-    [pullKey, cause],
+    `UPDATE bureau_pull_claims
+        SET state = 'FAILED', report_id = NULL, failure_cause = $2
+      WHERE pull_key = $1 AND state = 'IN_FLIGHT' AND lease_expires_at = $3`,
+    [pullKey, cause, heldSince],
   );
 };

@@ -164,6 +164,30 @@ export const buildStatus = async (
   application: ApplicationRecord,
   correlationId: string,
 ): Promise<StatusEnvelope> => {
+  const decision = await findPreDecision(db, application.id);
+
+  // RECEIVED, or ABANDONED after the sweeper. Both are in the status enum and
+  // neither has a verdict, so the honest answer is the envelope with nothing in
+  // the two fields that describe one — not a 500, which is what a non-nullable
+  // shape produced here before.
+  if (decision === null) {
+    return {
+      applicationId: application.id,
+      status: application.status,
+      submittedAt: application.submittedAt.toISOString(),
+      product: {
+        code: application.productCode,
+        requestedAmountMinor: application.requestedAmountMinor,
+        currency: application.currency,
+        termMonths: application.termMonths,
+      },
+      preDecision: null,
+      review: null,
+      outcome: null,
+      correlationId,
+    };
+  }
+
   const envelope = await buildEnvelope(db, policies, application, correlationId);
   const review = await findReview(db, application.id);
 

@@ -34,7 +34,12 @@ export const submitApplicationSchema = z
        * performing the pull, and it can be pushed to an integrator by contract
        * but not delegated away by API design. ADR-0007.
        */
-      attestedByCaller: z.literal(true),
+      // A boolean rather than `z.literal(true)`, so `false` reaches the service
+      // and returns CONSENT_REQUIRED. Under the literal, zod rejected it as a
+      // generic VALIDATION_FAILED and a documented error code in a catalogue
+      // that calls itself closed was unreachable — the inverse of the failure
+      // problem.ts opens by warning about.
+      attestedByCaller: z.boolean(),
       acceptedAt: z.string().datetime(),
     }),
 
@@ -133,16 +138,26 @@ export const statusResponseSchema = z
   .object({
     ...envelope,
     /**
+     * Null for an application that has no pre-decision: `RECEIVED`, because the
+     * process died between the insert and the verdict, and `ABANDONED` once the
+     * sweeper has retired it. Both statuses are in the enum above, so a
+     * non-nullable `preDecision` made two documented states unrenderable — and
+     * the endpoint answered 500 for them.
+     */
+    preDecision: preDecisionSchema.nullable(),
+    /**
      * The single composed answer: the reviewer's outcome once a review is
      * closed, otherwise the engine's verdict. GET only — the stored idempotent
      * body would go stale the moment a human closed the review, and a replayed
      * submission would then contradict the status endpoint.
      */
-    outcome: z.object({
-      verdict: z.enum(['APPROVED', 'DECLINED', 'MANUAL_REVIEW']),
-      source: z.enum(['ENGINE', 'REVIEWER']),
-      decidedAt: z.string(),
-    }),
+    outcome: z
+      .object({
+        verdict: z.enum(['APPROVED', 'DECLINED', 'MANUAL_REVIEW']),
+        source: z.enum(['ENGINE', 'REVIEWER']),
+        decidedAt: z.string(),
+      })
+      .nullable(),
   })
   .meta({ id: 'ApplicationStatus' });
 
@@ -187,16 +202,24 @@ export const replaySchema = z
     recorded: z.object({
       verdict: z.string(),
       reasonCodes: z.array(z.string()),
+      requestedAmountMinor: z.number().int().nullable(),
       approvedAmountMinor: z.number().int().nullable(),
+      monthlyPaymentMinor: z.number().int().nullable(),
+      offerExpiresAt: z.string().nullable(),
       score: z.number().int().nullable(),
+      dti: z.number().nullable(),
       policyVersion: z.string(),
       engineVersion: z.string(),
     }),
     recomputed: z.object({
       verdict: z.string(),
       reasonCodes: z.array(z.string()),
+      requestedAmountMinor: z.number().int().nullable(),
       approvedAmountMinor: z.number().int().nullable(),
+      monthlyPaymentMinor: z.number().int().nullable(),
+      offerExpiresAt: z.string().nullable(),
       score: z.number().int().nullable(),
+      dti: z.number().nullable(),
       policyVersion: z.string(),
       engineVersion: z.string(),
     }),

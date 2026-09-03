@@ -54,14 +54,15 @@ export interface BureauReport {
   readonly provider: string;
   readonly pulledAt: Date;
 
-  readonly subjectMatch: SubjectMatch;
+  /** D4 identity check. `undefined` is a gap, and D1 refers on it. */
+  readonly subjectMatch: SubjectMatch | undefined;
 
-  /** D2 knockout: something is delinquent right now. */
-  readonly hasActiveDelinquency: boolean;
-  /** D2 knockout. `null` means none on file. */
-  readonly monthsSinceBankruptcy: number | null;
-  /** D2 knockout. `null` means none on file. */
-  readonly monthsSinceChargeOff: number | null;
+  /** D2 knockout: something is delinquent right now. `undefined` is a gap, not a false. */
+  readonly hasActiveDelinquency: boolean | undefined;
+  /** D2 knockout. `null` means none on file — a fact. `undefined` is a gap. */
+  readonly monthsSinceBankruptcy: number | null | undefined;
+  /** D2 knockout. `null` means none on file — a fact. `undefined` is a gap. */
+  readonly monthsSinceChargeOff: number | null | undefined;
 
   /** Scorecard · payment history. The worst thing in 24 months, cured or not. */
   readonly worstDelinquencyLast24m: DelinquencyGrade | undefined;
@@ -92,6 +93,22 @@ export type BureauLookup =
   | { readonly outcome: 'UNAVAILABLE'; readonly provider: string; readonly cause: LookupFailureCause };
 
 /** What a provider can return. The gateway adds `WAIT_EXPIRED`; a provider never does. */
+/**
+ * A report that has passed D1's completeness gate.
+ *
+ * Existing as a separate type is what makes the gate load-bearing rather than
+ * advisory: D2 and D4 take this, so the only way to reach them is through the
+ * check that produced it. Before this existed the fields were non-optional and
+ * the gate was a courtesy — the compiler had no opinion about a knockout
+ * attribute that was never supplied.
+ */
+export interface CompleteBureauReport extends BureauReport {
+  readonly subjectMatch: SubjectMatch;
+  readonly hasActiveDelinquency: boolean;
+  readonly monthsSinceBankruptcy: number | null;
+  readonly monthsSinceChargeOff: number | null;
+}
+
 export type BureauProviderResult =
   | { readonly outcome: 'FOUND'; readonly report: BureauReport }
   | { readonly outcome: 'NO_HIT'; readonly provider: string; readonly pulledAt: Date }

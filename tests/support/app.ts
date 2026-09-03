@@ -12,7 +12,11 @@ export const testConfig = (overrides: NodeJS.ProcessEnv = {}): Config =>
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://u:p@localhost:5432/db',
     SUBJECT_KEY_PEPPER: 'x'.repeat(32),
-    API_TOKENS: 'acme-web:submission-secret',
+    // TWO submission clients, because one cannot exercise the cross-tenant
+    // case the idempotency key exists to prevent — and a test that submits as a
+    // single client passes unchanged against a two-part key, i.e. against the
+    // exact bug docs/02 §3 calls the sharpest possible own goal.
+    API_TOKENS: 'acme-web:submission-secret,partner-bank:partner-secret',
     REVIEWER_TOKENS: 'underwriting:reviewer-secret',
     AUDITOR_TOKENS: 'compliance:auditor-secret',
     POLICY_VERSION: '2026.09.1',
@@ -79,6 +83,7 @@ export const testApp = async (
 /** The tokens testConfig() hands out, so tests do not restate them. */
 export const TOKENS = {
   submission: 'submission-secret',
+  otherSubmission: 'partner-secret',
   reviewer: 'reviewer-secret',
   auditor: 'auditor-secret',
 } as const;

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { pullWithResilience } from '../../src/bureau/resilience.js';
-import { BureauTransportError, createMockBureau, type BureauProvider } from '../../src/bureau/provider.js';
+import { BureauTransportError, createMockBureau, type MockBureau } from '../../src/bureau/provider.js';
 import { deriveSubjectKey, pullKey, subjectKeysMatch } from '../../src/bureau/subject-key.js';
 
 const PEPPER = 'a-pepper-that-is-at-least-32-characters';
 
-const bureau = (overrides: Partial<Parameters<typeof createMockBureau>[0]> = {}): BureauProvider =>
+const bureau = (overrides: Partial<Parameters<typeof createMockBureau>[0]> = {}): MockBureau =>
   createMockBureau({
     provider: 'MOCKBUREAU',
     failureMode: 'none',
@@ -56,26 +56,36 @@ describe('the subject key', () => {
 
 describe('the mock bureau', () => {
   it('returns the documented profile for a documented identifier', async () => {
-    const result = await bureau().pull('900-55-0601');
+    const result = await bureau().pull('900-55-0601', 'req-1');
     expect(result.outcome).toBe('FOUND');
     if (result.outcome === 'FOUND') expect(result.report.revolvingUtilizationPct).toBe(8);
   });
 
   it('answers NO_HIT for the no-file identifier, and that is an answer', async () => {
-    const result = await bureau().pull('900-55-0300');
+    const result = await bureau().pull('900-55-0300', 'req-1');
     expect(result.outcome).toBe('NO_HIT');
   });
 
   it('fails on demand by identifier, with no configuration', async () => {
     // docs/08 §6: this is what makes the failure path demonstrable on the
     // deployed instance with one curl and no restart.
-    await expect(bureau().pull('900-55-9001')).rejects.toThrow(BureauTransportError);
+    await expect(bureau().pull('900-55-9001', 'req-1')).rejects.toThrow(BureauTransportError);
   });
 
-  it('never sees the subject key', () => {
+  it('never sees the subject key', async () => {
     // Not "ignores it" — it is not a parameter. A provider that could search by
     // our HMAC is a design that can never be pointed at a real bureau.
-    expect(bureau().pull.length).toBe(1);
+    //
+    // Asserting `pull.length === 1` was the earlier version of this test and it
+    // proved nothing: arity two passes just as well if the second argument IS
+    // the subject key. This asserts what actually matters — the value crossing
+    // the boundary is the identifier and an opaque call id, and the HMAC is
+    // nowhere in either.
+    const subjectKey = deriveSubjectKey('900-55-0601', PEPPER);
+    const provider = bureau();
+    await provider.pull('900-55-0601', 'req-opaque');
+    expect(provider.seenRequestIds).toEqual(['req-opaque']);
+    expect(provider.seenRequestIds.join()).not.toContain(subjectKey);
   });
 });
 
@@ -84,6 +94,37 @@ describe('one logical pull is one enquiry, whatever happens underneath', () => {
     const provider = bureau({ failureMode: 'flaky', failuresBeforeSuccess: 1 });
     const result = await pullWithResilience(provider, '900-55-0601', fast);
     expect(result.outcome).toBe('FOUND');
+  });
+
+  it('carries ONE request id across every attempt of one pull', async () => {
+    // Layer 4 of docs/02. A real bureau treats a repeated request id as the same
+    // enquiry; minting a fresh one per retry turns the retry budget into a
+    // multiplier on the applicant's credit file — the exact harm this service
+    // exists to prevent, inflicted by our own resilience code.
+    const provider = bureau({ failureMode: 'flaky', failuresBeforeSuccess: 2 });
+    await pullWithResilience(provider, '900-55-0601', { ...fast, maxAttempts: 3 });
+    expect(provider.seenRequestIds).toHaveLength(3);
+    expect(new Set(provider.seenRequestIds).size, 'three attempts, one enquiry').toBe(1);
+  });
+
+  it('gives two different pulls two different ids', async () => {
+    const provider = bureau();
+    await pullWithResilience(provider, '900-55-0601', fast);
+    await pullWithResilience(provider, '900-55-0601', fast);
+    expect(new Set(provider.seenRequestIds).size).toBe(2);
+  });
+
+  it('does not launder our own bug into a bureau outage', async () => {
+    // A TypeError in an adapter retried and then recorded as RETRIES_EXHAUSTED
+    // is a false statement about a third party inside a record built to be
+    // replayed. It must propagate, not be relabelled.
+    const broken = {
+      name: 'MOCKBUREAU',
+      pull: async () => {
+        throw new TypeError('cannot read properties of undefined');
+      },
+    };
+    await expect(pullWithResilience(broken, '900-55-0601', fast)).rejects.toThrow(TypeError);
   });
 
   it('reports RETRIES_EXHAUSTED after more than one attempt', async () => {
