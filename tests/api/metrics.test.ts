@@ -5,13 +5,13 @@ const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
 describe('/metrics is not public', () => {
   it('refuses an unauthenticated request', async () => {
-    const response = await testApp().inject({ method: 'GET', url: '/metrics' });
+    const response = await (await testApp()).inject({ method: 'GET', url: '/metrics' });
     expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({ code: 'UNAUTHENTICATED' });
   });
 
   it('refuses a malformed Authorization header', async () => {
-    const response = await testApp().inject({
+    const response = await (await testApp()).inject({
       method: 'GET',
       url: '/metrics',
       headers: { authorization: 'Basic abc123' },
@@ -20,7 +20,7 @@ describe('/metrics is not public', () => {
   });
 
   it('refuses an unknown token', async () => {
-    const response = await testApp().inject({
+    const response = await (await testApp()).inject({
       method: 'GET',
       url: '/metrics',
       headers: bearer('not-a-real-token'),
@@ -37,13 +37,13 @@ describe('/metrics is not public', () => {
     // 403 is "I know, and this is not yours". Telling an integrator their token
     // works but not here is more useful than a blanket 401 and leaks nothing
     // they do not already know.
-    const response = await testApp().inject({ method: 'GET', url: '/metrics', headers: bearer(token) });
+    const response = await (await testApp()).inject({ method: 'GET', url: '/metrics', headers: bearer(token) });
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('serves Prometheus text to an auditor', async () => {
-    const response = await testApp().inject({ method: 'GET', url: '/metrics', headers: bearer(TOKENS.auditor) });
+    const response = await (await testApp()).inject({ method: 'GET', url: '/metrics', headers: bearer(TOKENS.auditor) });
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/plain');
     expect(response.payload).toContain('http_requests_total');
@@ -56,7 +56,7 @@ describe('the counters actually move', () => {
     // The label is the route pattern. /v1/applications/{id} as a label value
     // would mint a new time series per application and make the metric useless
     // within a day.
-    const app = testApp();
+    const app = await testApp();
     await app.inject({ method: 'GET', url: '/health/live' });
 
     const response = await app.inject({ method: 'GET', url: '/metrics', headers: bearer(TOKENS.auditor) });
@@ -67,7 +67,7 @@ describe('the counters actually move', () => {
   it('counts 4xx and 5xx separately', async () => {
     // Mixed together, a buggy integrator's 422s drown a real outage — which is
     // also why the alert list in docs/06 excludes a raw error count.
-    const app = testApp();
+    const app = await testApp();
     app.get('/__throws', async () => {
       throw new Error('boom');
     });
@@ -85,7 +85,7 @@ describe('the counters actually move', () => {
     // Otherwise a scanner probing /wp-admin, /.env and friends creates a time
     // series per probe and the metric becomes an attacker-controlled cardinality
     // bomb.
-    const app = testApp();
+    const app = await testApp();
     await app.inject({ method: 'GET', url: '/.env' });
     await app.inject({ method: 'GET', url: '/wp-admin' });
 

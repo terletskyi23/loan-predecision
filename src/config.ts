@@ -84,7 +84,7 @@ const envSchema = z
     DATABASE_URL: z.string().url(),
     DATABASE_DIRECT_URL: z.string().url().optional(),
     DATABASE_POOL_MAX: int(1, 100).default(10),
-    MIGRATE_ON_BOOT: bool.default('true'),
+    MIGRATE_ON_BOOT: bool.default(true),
 
     // No default, by design. A defaulted pepper would be a shared secret baked
     // into the image, and every deployment would derive the same subject keys

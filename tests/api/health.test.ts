@@ -10,13 +10,13 @@ import { testApp, testConfig } from '../support/app.js';
  */
 describe('liveness and readiness are not the same question', () => {
   it('reports ready when the database answers', async () => {
-    const response = await testApp().inject({ method: 'GET', url: '/health/ready' });
+    const response = await (await testApp()).inject({ method: 'GET', url: '/health/ready' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: 'ready' });
   });
 
   it('reports 503 with the catalogue code when the database does not', async () => {
-    const app = testApp({
+    const app = await testApp({
       database: {
         ping: async () => {
           throw new Error('connection refused');
@@ -36,7 +36,7 @@ describe('liveness and readiness are not the same question', () => {
     // The assertion that matters. If liveness followed the database, the
     // platform would restart this container instead of routing around it, and
     // the restart loop would outlast the outage that caused it.
-    const app = testApp({
+    const app = await testApp({
       database: {
         ping: async () => {
           throw new Error('connection refused');
@@ -55,7 +55,7 @@ describe('liveness and readiness are not the same question', () => {
   });
 
   it('does not leak the database error to the caller', async () => {
-    const app = testApp({
+    const app = await testApp({
       database: {
         ping: async () => {
           throw new Error('password authentication failed for user "postgres"');
@@ -77,7 +77,7 @@ describe('the real pool, against a port with nothing behind it', () => {
   it('fails readiness rather than hanging', async () => {
     const config = testConfig({ DATABASE_URL: 'postgres://u:p@127.0.0.1:1/nothing' });
     const database = createDatabase(config, pino({ level: 'silent' }));
-    const app = testApp({ config, database });
+    const app = await testApp({ config, database });
 
     const started = Date.now();
     const response = await app.inject({ method: 'GET', url: '/health/ready' });

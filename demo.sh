@@ -61,6 +61,10 @@ expect 'GET /metrics unauthenticated'                401 "$BASE_URL/metrics"
 expect 'GET /metrics with a submission token'        403 -H "Authorization: Bearer $SUBMISSION_TOKEN" "$BASE_URL/metrics"
 expect 'GET /metrics with an auditor token'          200 -H "Authorization: Bearer $AUDITOR_TOKEN"    "$BASE_URL/metrics"
 
+hr 'The contract is generated from the routes, and served'
+expect 'GET /docs      interactive reference' 200 "$BASE_URL/docs"
+expect 'GET /docs/json the specification'     200 "$BASE_URL/docs/json"
+
 hr 'The lending paths'
 todo 'a normal approval'
 todo 'an approval reduced to fit DTI (the counter-offer)'

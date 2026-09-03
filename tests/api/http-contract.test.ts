@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../support/app.js';
 
-const app = testApp();
+const app = await testApp();
 
 describe('liveness', () => {
   it('answers 200 and touches nothing', async () => {
@@ -63,7 +63,7 @@ describe('errors are problem+json, always', () => {
     // forwards `error.message` is the most common way a stack trace, a query or
     // a connection string reaches a caller.
     const secret = 'connection refused to postgres://user:hunter2@internal-host';
-    const failing = testApp();
+    const failing = await testApp();
     failing.get('/__throws', async () => {
       throw new Error(secret);
     });

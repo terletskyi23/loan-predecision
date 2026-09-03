@@ -35,7 +35,7 @@ export const healthyDatabase = (): Database => ({
 });
 
 /** Silent by default: a test suite that prints its own logs hides its failures. */
-export const testApp = (options: { config?: Config; database?: Database } = {}) =>
+export const testApp = async (options: { config?: Config; database?: Database } = {}) =>
   buildServer({
     config: options.config ?? testConfig(),
     logger: pino({ level: 'silent' }),

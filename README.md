@@ -78,6 +78,8 @@ npm run dev
 | `npm run typecheck` | |
 | `npm run lint` | guards one architectural invariant, not style — see ADR-0008 |
 | `npm run migrate` | applies pending migrations; idempotent |
+| `npm run openapi` | regenerates `openapi.json` from the route schemas |
+| `npm run openapi:check` | fails if the committed spec has drifted from the code |
 | `./demo.sh` | walks the interesting paths against a running instance |
 
 The service listens on `http://localhost:3000`. `./demo.sh` exercises what is
@@ -90,6 +92,12 @@ SUBMISSION_TOKEN=... AUDITOR_TOKEN=... ./demo.sh
 ```
 
 ### Trying the deployed instance
+
+**<https://loan-predecision.onrender.com/docs>** is the fastest way in: an
+interactive page generated from the route schemas, with an **Authorize** button
+for the demo token. The page is public; every call it makes still needs the
+token. `openapi.json` in the repository is the same contract, and CI fails if it
+drifts from the code — see ADR-0009.
 
 ```bash
 curl -sS -X POST "$BASE_URL/v1/applications" \

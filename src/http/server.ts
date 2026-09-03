@@ -1,10 +1,19 @@
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
+import {
+  jsonSchemaTransform,
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from 'fastify-type-provider-zod';
 import type { Logger } from 'pino';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import type { Config } from '../config.js';
 import type { Database } from '../db/pool.js';
 import type { Metrics } from '../metrics.js';
 import { requireScope } from './auth.js';
+import { liveSchema, openapiDocument, problemSchema, readySchema } from './openapi.js';
 import { CORRELATION_HEADER, correlationIdFrom } from './correlation.js';
 import { AppError, toProblem } from './problem.js';
 
@@ -31,7 +40,7 @@ export interface ServerDependencies {
  * a concrete pino Logger narrows Fastify's logger generic, and widening it back
  * to the default would discard the typing on request.log.
  */
-export const buildServer = ({ config, logger, database, metrics }: ServerDependencies) => {
+export const buildServer = async ({ config, logger, database, metrics }: ServerDependencies) => {
   const app = Fastify({
     loggerInstance: logger,
     // Behind Render's proxy, so the client address comes from the forwarded
@@ -39,6 +48,29 @@ export const buildServer = ({ config, logger, database, metrics }: ServerDepende
     trustProxy: true,
     bodyLimit: 256 * 1024,
   });
+
+  // zod compiles both the request validation and the OpenAPI document, so the
+  // two cannot disagree — the schema is written once and read three times.
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+
+  // Registered before any route: @fastify/swagger collects routes through an
+  // onRoute hook, and a hook cannot see a route that was declared first.
+  await app.register(fastifySwagger, {
+    openapi: openapiDocument(),
+    transform: jsonSchemaTransform,
+  });
+
+  await app.register(fastifySwaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list', deepLinking: true, persistAuthorization: true },
+    // Assets are served from this origin, not a CDN. A documentation page that
+    // fetches its own JavaScript from someone else's domain is a supply chain
+    // the deployment does not control.
+    staticCSP: true,
+  });
+
+  const routes = app.withTypeProvider<ZodTypeProvider>();
 
   // Every response carries a correlation id, and every error body repeats it.
   // Assigned before anything else runs, so a failure in the very next hook is
@@ -84,35 +116,75 @@ export const buildServer = ({ config, logger, database, metrics }: ServerDepende
       .send(toProblem(appError, request.correlationId));
   });
 
-  app.get('/health/live', async () => {
-    // Touches nothing on purpose. A failing liveness probe means "restart me",
-    // and a probe that checks a dependency turns an outage into a restart loop.
-    // docs/06-failure-modes.md, Operational.
-    return { status: 'ok' };
-  });
+  routes.get(
+    '/health/live',
+    {
+      schema: {
+        tags: ['health'],
+        summary: 'Liveness',
+        description:
+          'Touches nothing. A failing liveness probe means "restart me", so a probe that checked a dependency would turn a database outage into a container restart loop.',
+        response: { 200: liveSchema },
+      },
+    },
+    async () => {
+      // docs/06-failure-modes.md, Operational.
+      return { status: 'ok' } as const;
+    },
+  );
 
   // Behind the auditor scope rather than open. An earlier draft marked this
   // "none — bind internally in production", which described a deployment shape
   // this service does not have: one instance, one public URL, no second bind.
   // Left open, the outcome mix and pull volumes would be world-readable.
-  app.get('/metrics', { preHandler: requireScope(config, 'audit') }, async (_request, reply) => {
-    void reply.type(metrics.registry.contentType);
-    return metrics.registry.metrics();
-  });
+  routes.get(
+    '/metrics',
+    {
+      preHandler: requireScope(config, 'audit'),
+      schema: {
+        tags: ['operations'],
+        summary: 'Prometheus metrics',
+        description:
+          'Behind the auditor scope, not public: this instance has one public URL and no second bind, so an open endpoint would make the outcome mix and pull volumes world-readable. Nothing scrapes this in v1.',
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: z.string().describe('Prometheus text exposition format'),
+          401: problemSchema,
+          403: problemSchema,
+        },
+      },
+    },
+    async (_request, reply) => {
+      void reply.type(metrics.registry.contentType);
+      return metrics.registry.metrics();
+    },
+  );
 
-  app.get('/health/ready', async (request) => {
+  routes.get(
+    '/health/ready',
+    {
+      schema: {
+        tags: ['health'],
+        summary: 'Readiness',
+        description:
+          'Verifies the database answers. Returns 503 when it does not, so a load balancer stops routing here without the container being killed.',
+        response: { 200: readySchema, 503: problemSchema },
+      },
+    },
+    async (request) => {
     // The split matters and is easy to get backwards. Readiness says "do not
     // send me traffic"; liveness says "restart me". A database outage must
     // produce the first and never the second, or the platform restarts healthy
     // containers for the duration of someone else's incident.
-    try {
-      await database.ping();
-      return { status: 'ready' };
-    } catch (error) {
-      request.log.warn({ err: error, correlationId: request.correlationId }, 'readiness check failed');
-      throw new AppError('DATABASE_UNAVAILABLE', 'The database is not reachable.');
-    }
-  });
+      try {
+        await database.ping();
+        return { status: 'ready' } as const;
+      } catch (error) {
+        request.log.warn({ err: error, correlationId: request.correlationId }, 'readiness check failed');
+        throw new AppError('DATABASE_UNAVAILABLE', 'The database is not reachable.');
+      }
+    },
+  );
 
   app.log.info({ nodeEnv: config.NODE_ENV }, 'server built');
   return app;

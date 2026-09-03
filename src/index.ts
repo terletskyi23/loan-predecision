@@ -33,7 +33,7 @@ if (config.MIGRATE_ON_BOOT) {
 
 const database = createDatabase(config, logger);
 const metrics = createMetrics();
-const app = buildServer({ config, logger, database, metrics });
+const app = await buildServer({ config, logger, database, metrics });
 
 /**
  * Order matters: stop accepting requests, then release the pool. Closing the

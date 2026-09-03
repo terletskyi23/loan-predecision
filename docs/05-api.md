@@ -115,6 +115,23 @@ pull — that is prevented separately — but it will create a second record.
 | `GET` | `/health/live` | none |
 | `GET` | `/health/ready` | none |
 | `GET` | `/metrics` | audit |
+| `GET` | `/docs` | none — see below |
+| `GET` | `/docs/json` | none — see below |
+
+**This document and the specification are generated from the same routes.** The
+tables below carry the reasoning; `/docs/json` carries the machine-readable
+contract, produced from the zod schema each route is declared with, so request
+validation, the TypeScript types and the specification cannot disagree. It is
+committed as `openapi.json` and CI fails on any diff (ADR-0009). A test asserts
+that every route the service serves appears in the table above — the reverse is
+not asserted, because this document describes the finished contract and
+documents endpoints before they are implemented.
+
+`/docs` serves an interactive page and is **public**, while every call it makes
+still needs a bearer token: the form can be filled and not submitted. Use the
+**Authorize** button. In a production deployment the page would sit behind the
+same authentication as the API — publishing an interactive form for an endpoint
+that triggers a hard credit enquiry is not something to do for convenience.
 
 `/metrics` is behind the auditor token rather than open. It was previously
 marked "none — bind internally in production", which was a note about a

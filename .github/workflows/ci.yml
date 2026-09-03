@@ -88,6 +88,11 @@ jobs:
       - name: Migrate
         run: npm run migrate
 
+      # A route added without a schema, or a schema changed without regenerating,
+      # fails here rather than being discovered by an integrator.
+      - name: OpenAPI is in step with the routes
+        run: npm run openapi:check
+
       - name: Tests
         run: npm test
 

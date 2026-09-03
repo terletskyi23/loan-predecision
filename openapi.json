@@ -1,0 +1,175 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Instant Loan Pre-Decision API",
+    "version": "1.0.0",
+    "description": "Accepts a loan application and returns an automated **pre-decision** with stable reason codes.\n\nThis is not the final credit decision. Where an application is referred, a person at the lender\ndecides on criteria this service does not model, and that outcome is a separate record.\n\nThe reasoning behind every field and error code is in `docs/05-api.md`; this document is the\nmachine-readable half, generated from the route schemas so it cannot drift from the code."
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A bearer token in the form the service was configured with.\n\nThree separate lists exist — submission, review and audit — and a token valid for one scope\nreturns 403 on another. Use the **Authorize** button; the demo token is in the submission email."
+      }
+    },
+    "schemas": {}
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "summary": "Liveness",
+        "tags": [
+          "health"
+        ],
+        "description": "Touches nothing. A failing liveness probe means \"restart me\", so a probe that checked a dependency would turn a database outage into a container restart loop.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "tags": [
+          "operations"
+        ],
+        "description": "Behind the auditor scope, not public: this instance has one public URL and no second bind, so an open endpoint would make the outcome mix and pull volumes world-readable. Nothing scrapes this in v1.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "Prometheus text exposition format"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Readiness",
+        "tags": [
+          "health"
+        ],
+        "description": "Verifies the database answers. Returns 503 when it does not, so a load balancer stops routing here without the container being killed.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://loan-predecision.onrender.com",
+      "description": "Deployed instance (free tier; first request after a quiet period is slow)"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local"
+    }
+  ],
+  "tags": [
+    {
+      "name": "health",
+      "description": "Liveness and readiness. They answer different questions."
+    },
+    {
+      "name": "operations",
+      "description": "Metrics. Behind the auditor scope, not public."
+    },
+    {
+      "name": "applications",
+      "description": "Submit an application and read its status."
+    },
+    {
+      "name": "reviews",
+      "description": "Record the outcome of a manual review."
+    },
+    {
+      "name": "audit",
+      "description": "Evidence: the event chain, and replay of a stored pre-decision."
+    }
+  ]
+}
