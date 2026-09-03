@@ -93,6 +93,13 @@ SUBMISSION_TOKEN=... AUDITOR_TOKEN=... ./demo.sh
 
 ### Trying the deployed instance
 
+> **If you are reviewing this, start with [`REVIEWING.md`](REVIEWING.md).** It is
+> a copy-paste walk through thirteen cases — an approval that carries no reason
+> codes, a counter-offer, a decline, a forced bureau outage, a duplicate that
+> causes no second enquiry, the audit chain and a replay — each saying what a
+> correct answer looks like and why it is the interesting one.
+
+
 **<https://loan-predecision.onrender.com/docs>** is the fastest way in: an
 interactive reference generated from the route schemas, with an **Authorize**
 button for the demo token. The page is public; every call it makes still needs
