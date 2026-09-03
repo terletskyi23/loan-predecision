@@ -160,9 +160,18 @@ comfortably above the thin-file floor.
 
 ### Resulting scores
 
-Every number below is recomputed from `policies/2026.09.1.json` rather than
-asserted, and `tests/unit/mock-profiles.test.ts` re-derives them so this table
-cannot drift from the catalogue.
+Every number below is a consequence of the attribute table above and the bands
+in `policies/2026.09.1.json` — none of them is a figure typed in by hand and
+hoped for. All six were recomputed against that file when the catalogue was
+implemented, and all six agreed.
+
+`tests/unit/mock-profiles.test.ts` holds the standing check. It currently proves
+the half that does not need the engine: that every documented identifier reaches
+its documented profile whatever its spelling, that the attributes are the ones
+this table names, and that an unlisted identifier gets the same report forever.
+Re-deriving the **scores** needs the scorecard evaluator, so that assertion is an
+`it.todo` in the same file and lands with `decide(...)` — visible in the test
+output rather than promised in prose.
 
 | Profile | Payment | Utilisation | History | Inquiries | Mix | **Total** |
 |---|---|---|---|---|---|---|
