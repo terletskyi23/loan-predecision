@@ -4,6 +4,8 @@ import { loadConfig } from '../src/config.js';
 import { createMetrics } from '../src/metrics.js';
 import { buildServer } from '../src/http/server.js';
 import type { Database } from '../src/db/pool.js'
+import { createServices } from '../src/services/index.js';
+import { createFilePolicyStore } from '../src/policy/loader.js';
 
 /** The spec is generated from route schemas; no statement is ever run. */
 const stubDatabase = (): Database => ({
@@ -55,6 +57,13 @@ const app = await buildServer({
   logger: pino({ level: 'silent' }),
   database: stubDatabase(),
   metrics: createMetrics(),
+  services: createServices({
+    config,
+    database: stubDatabase(),
+    policies: createFilePolicyStore('./policies'),
+    metrics: createMetrics(),
+    logger: pino({ level: 'silent' }),
+  }),
 });
 
 await app.ready();

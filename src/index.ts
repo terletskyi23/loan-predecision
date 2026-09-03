@@ -5,6 +5,7 @@ import { runMigrations } from './db/migrate.js';
 import { createMetrics } from './metrics.js';
 import { buildServer } from './http/server.js';
 import { createFilePolicyStore } from './policy/loader.js';
+import { createServices } from './services/index.js';
 
 /**
  * Composition root. The only place that knows how the pieces fit together, and
@@ -55,12 +56,21 @@ try {
 
 const database = createDatabase(config, logger);
 const metrics = createMetrics();
-const app = await buildServer({ config, logger, database, metrics });
 
 /**
- * Order matters: stop accepting requests, then release the pool. Closing the
- * pool first would fail every request still in flight.
+ * The composition root. Everything above is constructed; nothing constructs
+ * itself. This is what ADR-0008 buys instead of a DI container: wiring that can
+ * be read top to bottom, and a domain layer reached by nothing because nothing
+ * here hands it anything but plain values.
  */
+const app = await buildServer({
+  config,
+  logger,
+  database,
+  metrics,
+  services: createServices({ config, database, policies, metrics, logger }),
+});
+
 const shutdown = (signal: string): void => {
   logger.info({ signal }, 'shutting down');
   void app

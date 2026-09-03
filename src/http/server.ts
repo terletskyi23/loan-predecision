@@ -13,6 +13,7 @@ import type { Config } from '../config.js';
 import type { Database } from '../db/pool.js';
 import type { Metrics } from '../metrics.js';
 import { requireScope } from './auth.js';
+import { registerRoutes, type Services } from './routes.js';
 import { liveSchema, openapiDocument, problemSchema, readySchema } from './openapi.js';
 import { CORRELATION_HEADER, correlationIdFrom } from './correlation.js';
 import { AppError, toProblem } from './problem.js';
@@ -33,6 +34,12 @@ export interface ServerDependencies {
    */
   readonly database: Database;
   readonly metrics: Metrics;
+  /**
+   * The application, review and audit services. Built by the composition root
+   * and handed in, so the HTTP layer constructs nothing and a test can drive a
+   * route against a service with a stubbed database.
+   */
+  readonly services: Services;
 }
 
 /**
@@ -40,7 +47,7 @@ export interface ServerDependencies {
  * a concrete pino Logger narrows Fastify's logger generic, and widening it back
  * to the default would discard the typing on request.log.
  */
-export const buildServer = async ({ config, logger, database, metrics }: ServerDependencies) => {
+export const buildServer = async ({ config, logger, database, metrics, services }: ServerDependencies) => {
   const app = Fastify({
     loggerInstance: logger,
     // Behind Render's proxy, so the client address comes from the forwarded
@@ -185,6 +192,8 @@ export const buildServer = async ({ config, logger, database, metrics }: ServerD
       }
     },
   );
+
+  registerRoutes(app, config, services);
 
   app.log.info({ nodeEnv: config.NODE_ENV }, 'server built');
   return app;

@@ -3,6 +3,9 @@ import { loadConfig, type Config } from '../../src/config.js';
 import type { Database } from '../../src/db/pool.js';
 import { createMetrics } from '../../src/metrics.js';
 import { buildServer } from '../../src/http/server.js';
+import { createServices } from '../../src/services/index.js';
+import { createFilePolicyStore } from '../../src/policy/loader.js';
+import type { BureauGateway } from '../../src/bureau/gateway.js';
 
 export const testConfig = (overrides: NodeJS.ProcessEnv = {}): Config =>
   loadConfig({
@@ -47,15 +50,31 @@ export const healthyDatabase = (): Database => ({
 });
 
 /** Silent by default: a test suite that prints its own logs hides its failures. */
-export const testApp = async (options: { config?: Config; database?: Database } = {}) =>
-  buildServer({
-    config: options.config ?? testConfig(),
-    logger: pino({ level: 'silent' }),
-    database: options.database ?? healthyDatabase(),
+export const testApp = async (
+  options: { config?: Config; database?: Database; gateway?: BureauGateway } = {},
+) => {
+  const config = options.config ?? testConfig();
+  const database = options.database ?? healthyDatabase();
+  const metrics = createMetrics();
+  const logger = pino({ level: 'silent' });
+
+  return buildServer({
+    config,
+    logger,
+    database,
     // A fresh registry per app: a shared one would carry counts between tests
     // and make an assertion about "the counter moved" depend on run order.
-    metrics: createMetrics(),
+    metrics,
+    services: createServices({
+      config,
+      database,
+      policies: createFilePolicyStore('./policies'),
+      metrics,
+      logger,
+      ...(options.gateway === undefined ? {} : { gateway: options.gateway }),
+    }),
   });
+};
 
 /** The tokens testConfig() hands out, so tests do not restate them. */
 export const TOKENS = {
