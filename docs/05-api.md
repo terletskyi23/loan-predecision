@@ -25,7 +25,7 @@ never belong to anyone.
 | Identifiers | UUID v4, opaque to the caller |
 | Correlation | Every response carries `X-Correlation-Id`; errors repeat it in the body. Quote it to support and the request can be found in the logs |
 
-The rounding row is not pedantry. `monthlyPaymentMinor: 72033` in §3.1 is
+The rounding row is not pedantry. `monthlyPaymentMinor: 72033` in §3.2 is
 reachable only by half-up — floor and truncation both give `72032` — and replay
 compares that field. Two implementations of this specification that pick
 different conventions disagree on every counter-offer, and the endpoint that
@@ -267,7 +267,101 @@ that computes it fresh.
 
 ---
 
-### 3.1 Approved, with a reduced amount
+### 3.1 Approved in full
+
+The simplest path, and the one whose absence from this document hid a defect
+until phase 3: every other example here carries reason codes, so the constraint
+that demanded at least one looked total. It is not. Bureau profile `PRIME`,
+reachable with identifier `900-55-0601`.
+
+**Request**
+
+```json
+{
+  "productCode": "PERSONAL_UNSECURED_V1",
+  "requestedAmountMinor": 1800000,
+  "currency": "USD",
+  "termMonths": 36,
+  "purpose": "HOME_IMPROVEMENT",
+  "consent": {
+    "attestedByCaller": true,
+    "acceptedAt": "2026-09-02T08:41:12.700Z"
+  },
+  "applicant": {
+    "firstName": "Daniel",
+    "lastName": "Okonkwo",
+    "dateOfBirth": "1988-02-19",
+    "nationalId": "900-55-0601",
+    "email": "daniel.okonkwo@example.com",
+    "phone": "+12025550601",
+    "residenceCountry": "US"
+  },
+  "finances": {
+    "monthlyIncomeMinor": 620000,
+    "employmentStatus": "EMPLOYED",
+    "employmentMonths": 94,
+    "declaredMonthlyObligationsMinor": 90000
+  },
+  "channel": "WEB"
+}
+```
+
+**Response — `201 Created`**
+
+```json
+{
+  "applicationId": "3f8c1b02-91d4-4a77-8e26-5c0b7ad34e19",
+  "status": "PRE_DECIDED",
+  "submittedAt": "2026-09-02T08:41:30.044Z",
+  "product": {
+    "code": "PERSONAL_UNSECURED_V1",
+    "requestedAmountMinor": 1800000,
+    "currency": "USD",
+    "termMonths": 36
+  },
+  "preDecision": {
+    "verdict": "APPROVED",
+    "reasonCodes": [],
+    "offer": {
+      "approvedAmountMinor": 1800000,
+      "currency": "USD",
+      "termMonths": 36,
+      "annualRatePct": 12.9,
+      "monthlyPaymentMinor": 60562,
+      "expiresAt": "2026-10-02T08:41:30.044Z"
+    },
+    "assessment": {
+      "score": 100,
+      "maxScore": 100,
+      "band": "AUTO_APPROVE",
+      "dti": 0.2428
+    },
+    "policyVersion": "2026.09.1",
+    "engineVersion": "1.0.0",
+    "bureauReportId": "9d1e7c65-40ab-4b3f-8a52-1f6d09c8b774",
+    "bureauReportReused": false,
+    "decidedAt": "2026-09-02T08:41:30.812Z"
+  },
+  "review": null,
+  "correlationId": "01J9R4W2FT5H9C1P8K2A7Y3ZDM"
+}
+```
+
+**`reasonCodes` is empty, and that is correct rather than missing.** The
+scorecard awards all 100 points, so no factor loses the five points that make it
+disclosable; the amount asked for is affordable, so there is no counteroffer.
+An approval on the terms applied for is not adverse action and owes the
+applicant no explanation — an empty list is the accurate statement, and
+inventing a code to fill it would put an unfalsifiable "reason" into a record
+built to be replayed. ADR-0010 has the argument and the two constraints that now
+express it.
+
+The field is always present. A client may read `reasonCodes.length === 0` and
+must not treat the empty array as an absent one.
+
+---
+
+### 3.2 Approved, with a reduced amount
 
 The worked example from `docs/03-decision-policy.md` §5. Bureau profile
 `CLEAN_MODERATE`.
@@ -356,7 +450,7 @@ so the reasons are supplied up front rather than only if the applicant declines.
 
 ---
 
-### 3.2 Declined
+### 3.3 Declined
 
 Bureau profile `ADVERSE_HISTORY`, identifier `900-55-0221`. The inputs are given
 so the verdict can be checked against `policies/2026.09.1.json` the same way the
@@ -423,7 +517,7 @@ second mark on the applicant's file.
 
 ---
 
-### 3.3 Referred, because the bureau did not answer
+### 3.4 Referred, because the bureau did not answer
 
 ```json
 {
@@ -470,7 +564,7 @@ tell a genuine first-time borrower that our vendor was down.
 
 ---
 
-### 3.4 Replayed submission
+### 3.5 Replayed submission
 
 The same key, the same body, a second time:
 

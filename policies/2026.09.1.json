@@ -2,7 +2,7 @@
   "version": "2026.09.1",
   "effectiveFrom": "2026-09-01",
   "currency": "USD",
-  "notes": "Synthetic policy. Thresholds are illustrative and modelled on common US consumer-lending practice; they are not a real lender's underwriting standard. This file may still be edited in place because no pre-decision has ever been made under it. Once the service is live, a change means a new version file: see ADR-0005.",
+  "notes": "Synthetic policy. Thresholds are illustrative and modelled on common US consumer-lending practice; they are not a real lender's underwriting standard. This file is immutable from the commit that introduced it: a change is a new version file, never an edit here. See ADR-0005 and docs/03-decision-policy.md section 6.",
 
   "products": {
     "PERSONAL_UNSECURED_V1": {

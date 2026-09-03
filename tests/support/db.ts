@@ -137,13 +137,32 @@ export const PG = {
   notNullViolation: '23502',
 } as const;
 
-export const expectPgError = async (work: Promise<unknown>, code: string): Promise<void> => {
+/**
+ * `constraint` is optional but strongly preferred wherever a table carries more
+ * than one constraint of the same class. `23514` is check_violation for ANY
+ * check on the table, so a test that asserts only the SQLSTATE passes when the
+ * row is refused for a reason it was not written to prove — which is how a
+ * phase 2 step passed for the wrong reason once already.
+ */
+export const expectPgError = async (
+  work: Promise<unknown>,
+  code: string,
+  constraint?: string,
+): Promise<void> => {
   try {
     await work;
   } catch (error) {
-    const actual = (error as { code?: string }).code;
+    const { code: actual, constraint: actualConstraint } = error as {
+      code?: string;
+      constraint?: string;
+    };
     if (actual !== code) {
       throw new Error(`expected Postgres error ${code}, got ${String(actual)}: ${String(error)}`);
+    }
+    if (constraint !== undefined && actualConstraint !== constraint) {
+      throw new Error(
+        `expected the row to be refused by ${constraint}, but ${String(actualConstraint)} refused it first`,
+      );
     }
     return;
   }

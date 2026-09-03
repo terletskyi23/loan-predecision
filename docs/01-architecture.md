@@ -267,11 +267,11 @@ than removes.
 
 ### Where the guarantees physically live
 
-**Four constraints, one compare-and-set, and one lease.** They are not the same
+**Five constraints, one compare-and-set, and one lease.** They are not the same
 strength, and the difference is stated rather than blurred, because the weakest
 of the three is the one guarding the requirement the brief singled out.
 
-**Four constraints — the database refuses the bad state outright:**
+**Five constraints — the database refuses the bad state outright:**
 
 | Constraint | Prevents |
 |---|---|
@@ -279,6 +279,18 @@ of the three is the one guarding the requirement the brief singled out.
 | `pre_decisions` PK `(application_id)` | A second, conflicting engine verdict on one application |
 | `audit_events` PK `(application_id, chain_index)` | A concurrent double-append breaking the chain |
 | `reviews` CHECK: `state='CLOSED'` implies `outcome` and `reviewer_id` are not null | A closed review with no outcome, or with **no attributable human** — which is precisely the audit question "could anyone have altered a verdict after the fact?" |
+| `pre_decisions` CHECK: an `APPROVED` for **less** than was requested carries at least one reason code | A counteroffer with no disclosable reason. Under Regulation B a counteroffer becomes adverse action the moment the applicant declines it, so the notice has to be available — see ADR-0010 |
+
+The fifth is the reason `pre_decisions` carries `requested_amount_minor` as well
+as `approved_amount_minor`. A CHECK cannot reference another table, so with the
+requested figure living only in `applications` the rule could not be a constraint
+at all — only a convention in the engine, which is the category `migrations/001_init.sql`
+opens by rejecting. Both rows are written once and never updated, so the two
+copies cannot drift.
+
+An approval on the terms applied for is the case this constraint deliberately
+does **not** cover: it is not adverse action, it owes nobody a reason, and its
+`reason_codes` is legitimately empty. That asymmetry is the whole of ADR-0010.
 
 **One compare-and-set.** Closing a review is a conditional update,
 `... WHERE state = 'PENDING'`, so two concurrent close attempts result in one

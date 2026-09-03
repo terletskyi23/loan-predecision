@@ -234,6 +234,15 @@ points. Ordering is deterministic:
 The same inputs always produce the same list, which is what makes the audit
 stable and the tests meaningful.
 
+**The list can legitimately be empty, and only for one verdict.** If every
+factor is inside its top band and the amount asked for is affordable, nothing
+lost five points and no decisive code applies, so the derivation yields nothing.
+That is the correct answer for an approval on the requested terms: it is not
+adverse action, and there is no reason owed. Profile `PRIME`
+(`docs/08-mock-bureau.md` §4) reaches it. For every other verdict an empty list
+is a defect, and the database refuses it — the asymmetry, and why the
+counter-offer case sits on the refusing side of it, is ADR-0010.
+
 **Why this mechanism and not a hand-picked list.** The official commentary to
 Regulation B describes acceptable methods for choosing the principal reasons in
 a credit-scoring system: identifying the factors on which the applicant's score
@@ -399,7 +408,7 @@ they are not disclosed. The applicant gets the reasons that actually moved the
 outcome, not a list of everything imperfect about their file.
 
 A second worked example ending in a decline, with its bureau inputs, is in
-`docs/05-api.md` §3.2.
+`docs/05-api.md` §3.3.
 
 ---
 
