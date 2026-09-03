@@ -11,7 +11,7 @@ bureau is contacted.
 **Author:** Vasyl Terletskyi
 **Honest time spent:** _<fill in before sending — include the time spent
 understanding the domain, not only the time spent typing>_
-**Live service:** _<public HTTPS URL>_
+**Live service:** <https://loan-predecision.onrender.com>
 
 ---
 
@@ -113,8 +113,11 @@ in `examples/`:
 Full catalogue and attribute values in
 [`docs/08-mock-bureau.md`](docs/08-mock-bureau.md) §4.
 
-> The free hosting tier sleeps an idle instance. The first request after a quiet
-> period can take up to a minute; subsequent ones are fast.
+> **The first request after a quiet period is slow twice.** Render suspends a
+> free instance after 15 minutes of inactivity and takes about a minute to wake;
+> Neon suspends its compute after 5 and cannot be told not to on the free plan.
+> Expect tens of seconds on the first call and single-digit milliseconds after.
+> `GET /health/ready` is the cheapest way to warm both.
 
 ---
 
