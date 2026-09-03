@@ -343,11 +343,13 @@ matches — including the `BUREAU_UNAVAILABLE` branch, whose engine input
 (`lookup_failure_cause`) is a column on `pre_decisions` precisely so that this
 branch is replayable at all.
 
-**Check 2 is not implemented and is named here rather than quietly dropped.**
-The grep between `docs/06-failure-modes.md` and its coverage table is a script
-that does not exist. It is the cheapest of the three and the one most likely to
-have drifted by submission, which is exactly why leaving it unstated would be
-worse than leaving it undone.
+**Check 2 is not implemented, and its absence has already cost something.** The
+grep between `docs/06-failure-modes.md` and its coverage table is a script that
+does not exist — and while it did not exist, that table drifted into naming ten
+test files nobody had written. The table was reconciled by hand at the end of
+phase 3. The check that would have caught it a month earlier is still the
+cheapest of the three and is still not written, which is now a demonstrated cost
+rather than a hypothetical one.
 
 ---
 
@@ -362,10 +364,18 @@ npm test                         # unit + integration + api
 npm run test:unit                # pure, no database needed
 ```
 
-At the close of the vertical slice: **235 passing, 1 skipped**, against
-PostgreSQL 16. 188 unit and API tests need no database; 47 integration tests
-need one and skip without it, which is why CI sets `REQUIRE_DATABASE=1` and turns
-that skip into a hard error there.
+At the close of the vertical slice, after an adversarial review and its fixes:
+**261 passing, 1 skipped**, against PostgreSQL 16. 201 unit and API tests need
+no database; 61 integration tests need one and skip without it, which is why CI
+sets `REQUIRE_DATABASE=1` and turns that skip into a hard error there.
+
+`tests/integration/review-findings.test.ts` is worth opening on its own. It is
+one test per defect that review found after this suite was already green — a
+replay that did not compare the instalment, a database fault that guaranteed a
+second hard enquiry, a completeness gate that protected the applicant and not
+the lender, an orphan sweeper that four documents described and no file
+implemented. Kept together so a reader can see what was found late and what now
+prevents it.
 
 `./demo.sh` is the other half of the evidence and runs against a deployed
 instance rather than a test harness: 40 assertions covering every documented
