@@ -72,6 +72,7 @@ npm run dev
 ```bash
 npm test          # unit + integration + api, against real Postgres
 npm run typecheck
+npm run lint      # guards one architectural invariant, not style — see ADR-0008
 ```
 
 The service listens on `http://localhost:3000`. `./demo.sh` walks the
@@ -132,7 +133,7 @@ Read in this order. About twenty-five minutes end to end.
 | [`06-failure-modes.md`](docs/06-failure-modes.md) | What breaks, how we notice, what happens — and how this is deployed |
 | [`07-testing.md`](docs/07-testing.md) | Which properties are proven, and which are honestly not |
 | [`08-mock-bureau.md`](docs/08-mock-bureau.md) | The bureau contract, the three outcomes, the profile catalogue |
-| [`adr/`](docs/adr/) | Seven decisions, each with the alternative that was rejected and why |
+| [`adr/`](docs/adr/) | Eight decisions, each with the alternative that was rejected and why |
 
 `policies/2026.09.1.json` is the live policy: thresholds, scorecard bands,
 product limits, and the registry of every reason code the engine can emit. Old

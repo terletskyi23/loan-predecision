@@ -331,5 +331,13 @@ npm run test:unit                # pure, no database needed
 ```
 
 CI runs the same three commands against a Postgres service container, plus
-`npm run typecheck`. A red typecheck fails the build; there is no separate lint
-step in v1.
+`npm run typecheck` and `npm run lint`. Both failing are build failures.
+
+**The lint step is not a style gate.** It exists to guard one architectural
+invariant: `src/domain/**` may not import `pg`, `fastify`, a logger, anything
+from the infrastructure or service layers, or any `node:*` builtin. That is the
+rule three of this design's claims rest on — replayable decisions, rules
+testable without a database, no hidden dependency on wall-clock time — and it is
+the one rule no test can catch, because a domain function that opens its own
+connection still returns the right answer under test and fails only years later,
+in replay. ADR-0008 records why this is a lint rule rather than a DI container.
